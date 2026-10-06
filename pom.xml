@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ============================================================================
+  NON-FUNCTIONAL IN THIS SANDBOX - DOCUMENTATION ONLY
+  ============================================================================
+  This pom.xml records the INTENDED Spring Boot 3.x dependency coordinates for
+  this project so it stays portable to an environment that has network access
+  to Maven Central.
+
+  It is NOT the build path in this sandbox. The sandbox runs in
+  INTEGRATIONS_ONLY network mode: Maven Central (repo.maven.apache.org) returns
+  HTTP 403, and repo1.maven.org / plugins.gradle.org / npm / PyPI / github.com
+  are all blocked. There is no local ~/.m2 cache either, so Maven/Gradle
+  dependency resolution CANNOT succeed here.
+
+  THE REAL BUILD PATH IS THE COMMITTED POSIX SHELL SCRIPT: ./build.sh
+      ./build.sh clean build   # compile + package out/app.jar (javac + jar)
+      ./build.sh test          # compile and run the zero-dependency tests
+      ./build.sh run           # start the HTTP server on :8080
+
+  The actual application uses ONLY the JDK standard library
+  (com.sun.net.httpserver, java.net.http, java.util.*, java.security.*).
+  Do NOT run `mvn` or `gradle` goals in this sandbox - they will fail on
+  dependency resolution.
+  ============================================================================
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.frauddetector</groupId>
+    <artifactId>fraud-detector</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+    <name>Medical Claim Fraud &amp; Inflated Billing Detector</name>
+
+    <!-- Intended parent for a networked build; unused in the sandbox. -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.2</version>
+        <relativePath/>
+    </parent>
+
+    <properties>
+        <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <!-- Intended coordinates only - NOT resolvable in this sandbox. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -1,0 +1,7 @@
+{
+  "task_id": "task-fraud-detector",
+  "task_description": "Build the Medical Claim Fraud & Inflated Billing Detector (PRD v1.0) as a Java backend. Due to the INTEGRATIONS_ONLY sandbox (no reachable package registry, no artifact cache), it is implemented as a pure-JDK application (no Spring Boot / no external JARs): HTTP + JSON micro-framework over com.sun.net.httpserver, in-memory repositories, JDK-crypto security, and a dependency-free multi-layer explainable fraud-scoring engine (PRD 'Option B' taken to its dependency-free extreme). Delivered in PRD MVP phases: Phase 1 vertical slice first, then the ML engine + explainability + investigation, then dashboard/reports/audit/notifications.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+  "blocked_reason": null
+}

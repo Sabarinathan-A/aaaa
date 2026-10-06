@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "PRD Phase 1 vertical slice: user authentication with roles, the core domain model + in-memory repositories, claim submission with full validation, and claim retrieval. This delivers a working end-to-end path (login -> submit claim -> validate -> persist -> read back) on top of the FEAT-001 micro-framework. Depends on FEAT-001.",
+  "status": "pending",
+  "steps": [
+    "Security (PRD FR-01, section 30): src/main/java/com/frauddetector/security/: Role.java enum {ADMIN, CLAIM_OFFICER, INVESTIGATOR, PROVIDER}. PasswordHasher.java using JDK java.security (PBKDF2WithHmacSHA256 via SecretKeyFactory with per-user random salt; store salt+hash; constant-time compare). TokenService.java issuing a signed stateless token (base64url header.payload.signature using javax.crypto.Mac HmacSHA256 with an app secret; payload carries userId, role, expiry) and verifying/parsing it - a hand-rolled JWT-shaped token, no external lib. Principal.java (userId, role). AuthFilter: a Router pre-handler that reads Authorization: Bearer <token>, verifies it, sets HttpContext.principal, and a requireRole(...) helper that throws ApiException(403) when the role is not permitted and ApiException(401) when missing/invalid.",
+    "Domain entities (PRD sections 23-24) under src/main/java/com/frauddetector/domain/: User(id,name,email,passwordHash,salt,role,status,createdAt), Patient(patientId,name,age,gender,location,insuranceId), Provider(providerId,providerName,hospital,location,specialization,riskScore), Claim(claimId,patientId,providerId,hospitalId,diagnosis,procedure,admissionDate,dischargeDate,claimDate,medicineCost,roomCharges,doctorCharges,labCharges,otherCharges,totalBilledAmount,insuranceAmount,claimStatus,createdAt). Use plain fields with getters or Java records where immutable. Represent money as BigDecimal, dates as LocalDate.",
+    "Repositories under src/main/java/com/frauddetector/repository/: a generic InMemoryRepository<ID,T> backed by ConcurrentHashMap, plus UserRepository (findByEmail), PatientRepository, ProviderRepository, ClaimRepository (findByPatientId, findByProviderId, existsById for duplicate claimId check, findAll). Thread-safe. No external DB.",
+    "DTOs under src/main/java/com/frauddetector/dto/: LoginRequest, LoginResponse(token, role, name), SubmitClaimRequest (all claim fields as JSON-friendly types), ClaimResponse, ErrorResponse(status,message). Map to/from the Json micro-codec.",
+    "Validation (PRD FR-03) in src/main/java/com/frauddetector/service/ValidationService.java: required fields present; numeric charges non-negative; totalBilledAmount equals or is consistent with the sum of component charges (document the rule chosen); valid dates; dischargeDate not before admissionDate (reject with specific message); referenced patientId and providerId must exist; duplicate claimId rejected. Collect all violations and throw ApiException(400) with a message listing them (or a 409 for duplicate claimId). Add negative-value and date-inconsistency cases explicitly.",
+    "ClaimService.java: submitClaim(SubmitClaimRequest, Principal) -> validates, assigns claimStatus=SUBMITTED, persists, returns ClaimResponse. getClaim(id) -> ClaimResponse or ApiException(404). listClaims(filters) stub returning all for now (full search added in FEAT-004). AuthService.java: login(email,password) -> verify hash, issue token, else ApiException(401).",
+    "Controllers under src/main/java/com/frauddetector/controller/: AuthController registering POST /api/auth/login (public) and POST /api/auth/logout. ClaimController registering POST /api/claims (roles PROVIDER, CLAIM_OFFICER, ADMIN), GET /api/claims/{id} (any authenticated role), GET /api/claims (any authenticated). Wire all controllers + AuthFilter into App.bootstrap().",
+    "Seed data in src/main/java/com/frauddetector/config/Seed.java invoked at startup: one user per role (known emails + passwords, hashed at boot), a handful of patients and providers, and a few baseline historical claims so later ML features have reference data. Print seeded login credentials to stdout at startup for manual testing.",
+    "Tests under src/test/java/com/frauddetector/: PasswordHasherTest (hash verifies true for correct, false for wrong), TokenServiceTest (issued token verifies and parses; tampered/expired token rejected), ValidationServiceTest (valid claim passes; dischargeDate<admissionDate fails; negative charge fails; duplicate claimId fails; missing patient fails), ClaimServiceTest (submit then getClaim returns the stored claim). Register in build.sh test discovery."
+  ],
+  "acceptance_criteria": [
+    "'./build.sh test' passes including PasswordHasherTest, TokenServiceTest, ValidationServiceTest, ClaimServiceTest.",
+    "POST /api/auth/login with a seeded CLAIM_OFFICER credential returns a token; a wrong password returns 401.",
+    "POST /api/claims with a valid body and a valid Bearer token returns 201/200 with the created claim; the same request without a token returns 401; with a PATIENT-only... (PROVIDER token submitting is allowed, an INVESTIGATOR-only restricted endpoint later returns 403).",
+    "POST /api/claims with dischargeDate before admissionDate returns 400 with a message naming the date inconsistency.",
+    "POST /api/claims with a duplicate claimId returns 409 (or 400) and does not create a second record.",
+    "GET /api/claims/{id} returns the previously submitted claim; an unknown id returns 404."
+  ],
+  "verification": [
+    "cd /projects/sandbox/aaaa && ./build.sh clean build && ./build.sh test",
+    "Manual API smoke: start server, login as seeded claim officer to get TOKEN, POST a valid claim (expect success), POST invalid (discharge<admission) expect 400, GET /api/claims/{id} expect the claim, GET without token expect 401."
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

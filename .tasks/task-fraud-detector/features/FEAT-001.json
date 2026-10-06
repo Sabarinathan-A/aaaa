@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Establish the pure-JDK project skeleton, build/test tooling, and a minimal HTTP + JSON micro-framework over com.sun.net.httpserver. This replaces Spring Boot + Maven because no dependency registry is reachable in the sandbox (Maven Central 403; npm/PyPI/github blocked; no local ~/.m2 cache). Everything in this project is built from the JDK standard library only. This feature leaves a buildable, testable baseline with a trivial health endpoint and a passing test, i.e. the 'baseline green' for a greenfield project.",
+  "status": "completed",
+  "steps": [
+    "Create /projects/sandbox/aaaa/.gitignore ignoring: out/, *.jar, *.class, .idea/, *.iml, target/.",
+    "Create /projects/sandbox/aaaa/build.sh (chmod +x) as a POSIX sh driver with subcommands: 'clean' (rm -rf out), 'build' (javac -d out $(find src/main/java -name '*.java') then jar --create --file out/app.jar --main-class com.frauddetector.App -C out .), 'test' (compile src/main + src/test to out-test, then run each class named *Test via java and aggregate pass/fail, exit 1 if any fail), 'run' (java -cp out com.frauddetector.App). Use 'set -e' and clear echo output. Do NOT invoke mvn or gradle anywhere.",
+    "Create /projects/sandbox/aaaa/pom.xml documenting the INTENDED Spring Boot 3.x coordinates (spring-boot-starter-web, validation, security) with a prominent XML comment at the top stating it is non-functional in the INTEGRATIONS_ONLY sandbox because Maven Central is unreachable, and that build.sh is the real build path. This preserves portability for an environment with network access.",
+    "Create the HTTP micro-framework under src/main/java/com/frauddetector/http/: (a) Json.java - a hand-written JSON serializer (Map/List/String/Number/Boolean/null -> String) and a tolerant parser (String -> Map<String,Object>/List/primitives); no external libs. (b) HttpContext.java - wraps com.sun.net.httpserver.HttpExchange exposing method, path, path params, parsed JSON body (Map), query params, authenticated principal, and respond(int status, Object body) that serializes via Json and sets Content-Type application/json. (c) Route.java + Router.java - register (METHOD, pathPattern e.g. '/api/claims/{id}') -> handler (Function<HttpContext,?> or a Handler interface); match path templates and extract params; return 404 for no match, 405 for method mismatch; catch exceptions and map ApiException(status,message) to JSON error bodies, everything else to 500.",
+    "Create src/main/java/com/frauddetector/http/ApiException.java (RuntimeException carrying an int statusCode).",
+    "Create src/main/java/com/frauddetector/App.java with a main() that builds an HttpServer on port 8080 (configurable via PORT env var), wires a Router, registers GET /api/health -> {\"status\":\"UP\"}, uses a fixed thread pool executor, and starts the server. Keep controller wiring in a small bootstrap method so later features add routes here.",
+    "Create the test harness: src/test/java/com/frauddetector/testkit/Assert.java (assertEquals, assertTrue, assertThrows, assertNull/NotNull that throw AssertionError with messages) and a convention that test classes end in 'Test' and expose 'public static void main(String[] a)' (or a run() the harness calls). Document the convention in a comment.",
+    "Create src/test/java/com/frauddetector/http/JsonTest.java proving round-trip serialize/parse of a nested object (string, number, boolean, null, list, nested map) and RouterTest.java proving path-param extraction and 404/405 behavior. Wire these so './build.sh test' discovers and runs them."
+  ],
+  "acceptance_criteria": [
+    "'./build.sh clean build' exits 0 and produces out/app.jar with no compilation errors.",
+    "'./build.sh test' exits 0 and reports JsonTest and RouterTest as passed.",
+    "Starting './build.sh run' and calling 'curl -s localhost:8080/api/health' returns {\"status\":\"UP\"}.",
+    "No source file imports any non-JDK package (no org.springframework, no com.fasterxml, no org.junit); grep for those imports returns nothing.",
+    "build.sh never calls mvn or gradle."
+  ],
+  "verification": [
+    "cd /projects/sandbox/aaaa && ./build.sh clean build",
+    "cd /projects/sandbox/aaaa && ./build.sh test",
+    "cd /projects/sandbox/aaaa && (./build.sh run & SRV=$!; sleep 2; curl -s localhost:8080/api/health; kill $SRV)",
+    "! grep -rqE 'import (org.springframework|com.fasterxml|org.junit)' /projects/sandbox/aaaa/src"
+  ],
+  "blocked_reason": null,
+  "findings": "Implemented the pure-JDK skeleton with ONLY the standard library (no Spring/Jackson/JUnit). Files: .gitignore (also ignores out-test/), build.sh (POSIX sh, subcommands clean/build/test/run, discovers *Test classes excluding inner classes, exits 1 on any failure; never invokes mvn/gradle - the only 'mvn/gradle' mention is a comment), pom.xml (documentation-only, prominent top comment that it is non-functional in INTEGRATIONS_ONLY), http/ (Json hand-written serializer+tolerant parser, HttpContext over HttpExchange, Route+Router with path-template matching -> 404/405/ApiException->status/500, ApiException), App.java (HttpServer on PORT env or 8080, fixed thread pool, GET /api/health -> {\"status\":\"UP\"}, routes wired in bootstrap()), test/ (testkit/Assert with assertEquals/True/False/Null/NotNull/Throws, JsonTest nested round-trip, RouterTest with an in-memory fake HttpExchange proving path-param extraction + 404/405).\nVERIFICATION: './build.sh clean build' exits 0 and produces out/app.jar; './build.sh test' exits 0 (JsonTest + RouterTest PASS); grep found no org.springframework/com.fasterxml/org.junit imports.\nENV NOTE: default port 8080 was already occupied by an unrelated external process in the sandbox, so the live curl check was run with PORT=18080 (env override works); GET /api/health returned {\"status\":\"UP\"}, unknown path returned 404, wrong method returned 405. Default-port behavior is unchanged in code. Build/test are the authoritative green signal and both pass."
+}
