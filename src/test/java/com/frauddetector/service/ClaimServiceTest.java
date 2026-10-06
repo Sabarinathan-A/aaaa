@@ -1,10 +1,12 @@
 package com.frauddetector.service;
 
+import com.frauddetector.config.ThresholdConfig;
 import com.frauddetector.domain.Patient;
 import com.frauddetector.domain.Provider;
 import com.frauddetector.dto.SubmitClaimRequest;
 import com.frauddetector.http.ApiException;
 import com.frauddetector.repository.ClaimRepository;
+import com.frauddetector.repository.FraudAnalysisRepository;
 import com.frauddetector.repository.PatientRepository;
 import com.frauddetector.repository.ProviderRepository;
 import com.frauddetector.security.Principal;
@@ -33,7 +35,10 @@ public final class ClaimServiceTest {
         patients.save(new Patient("PAT-1", "Pat", 40, "F", "Austin", "INS-1"));
         providers.save(new Provider("PRV-1", "Prov", "Hosp", "Austin", "Cardio", BigDecimal.ZERO));
         ValidationService validation = new ValidationService(patients, providers, claims);
-        return new ClaimService(claims, validation);
+        FraudAnalysisRepository analyses = new FraudAnalysisRepository();
+        FraudRiskService fraudRiskService =
+                new FraudRiskService(claims, patients, ThresholdConfig.defaults());
+        return new ClaimService(claims, validation, fraudRiskService, analyses);
     }
 
     private static void testSubmitThenGet() {

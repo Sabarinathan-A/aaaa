@@ -1,10 +1,14 @@
 package com.frauddetector;
 
 import com.frauddetector.config.Seed;
+import com.frauddetector.config.ThresholdConfig;
 import com.frauddetector.controller.AuthController;
 import com.frauddetector.controller.ClaimController;
+import com.frauddetector.controller.InvestigationController;
 import com.frauddetector.http.Router;
 import com.frauddetector.repository.ClaimRepository;
+import com.frauddetector.repository.FraudAnalysisRepository;
+import com.frauddetector.repository.InvestigationRepository;
 import com.frauddetector.repository.PatientRepository;
 import com.frauddetector.repository.ProviderRepository;
 import com.frauddetector.repository.UserRepository;
@@ -13,6 +17,8 @@ import com.frauddetector.security.PasswordHasher;
 import com.frauddetector.security.TokenService;
 import com.frauddetector.service.AuthService;
 import com.frauddetector.service.ClaimService;
+import com.frauddetector.service.FraudRiskService;
+import com.frauddetector.service.InvestigationService;
 import com.frauddetector.service.ValidationService;
 import com.sun.net.httpserver.HttpServer;
 
@@ -72,6 +78,8 @@ public final class App {
         PatientRepository patients = new PatientRepository();
         ProviderRepository providers = new ProviderRepository();
         ClaimRepository claims = new ClaimRepository();
+        FraudAnalysisRepository analyses = new FraudAnalysisRepository();
+        InvestigationRepository investigations = new InvestigationRepository();
 
         // Security.
         PasswordHasher hasher = new PasswordHasher();
@@ -79,12 +87,18 @@ public final class App {
         AuthFilter authFilter = new AuthFilter(tokenService);
 
         // Services.
+        ThresholdConfig thresholds = ThresholdConfig.fromEnv();
         ValidationService validation = new ValidationService(patients, providers, claims);
-        ClaimService claimService = new ClaimService(claims, validation);
+        FraudRiskService fraudRiskService = new FraudRiskService(claims, patients, thresholds);
+        ClaimService claimService = new ClaimService(claims, validation, fraudRiskService, analyses);
         AuthService authService = new AuthService(users, hasher, tokenService);
+        InvestigationService investigationService = new InvestigationService(investigations, claims);
 
-        // Controllers.
+        // Controllers. InvestigationController registers the literal
+        // /api/claims/high-risk route, so it must come before ClaimController's
+        // /api/claims/{id} template.
         new AuthController(authService).register(router);
+        new InvestigationController(investigationService, claimService, authFilter).register(router);
         new ClaimController(claimService, authFilter).register(router);
 
         // Seed data + print credentials for manual testing.

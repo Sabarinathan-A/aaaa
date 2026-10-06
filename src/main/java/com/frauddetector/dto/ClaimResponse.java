@@ -1,6 +1,7 @@
 package com.frauddetector.dto;
 
 import com.frauddetector.domain.Claim;
+import com.frauddetector.domain.FraudAnalysis;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,13 +12,20 @@ import java.util.Map;
 public final class ClaimResponse {
 
     private final Claim claim;
+    private final FraudAnalysis analysis;
 
-    private ClaimResponse(Claim claim) {
+    private ClaimResponse(Claim claim, FraudAnalysis analysis) {
         this.claim = claim;
+        this.analysis = analysis;
     }
 
     public static ClaimResponse of(Claim claim) {
-        return new ClaimResponse(claim);
+        return new ClaimResponse(claim, null);
+    }
+
+    /** View including the fraud analysis produced for the claim. */
+    public static ClaimResponse of(Claim claim, FraudAnalysis analysis) {
+        return new ClaimResponse(claim, analysis);
     }
 
     public Map<String, Object> toJson() {
@@ -40,6 +48,9 @@ public final class ClaimResponse {
         json.put("insuranceAmount", asText(claim.getInsuranceAmount()));
         json.put("claimStatus", claim.getClaimStatus());
         json.put("createdAt", claim.getCreatedAt() == null ? null : claim.getCreatedAt().toString());
+        if (analysis != null) {
+            json.put("fraudAnalysis", FraudAnalysisResponse.of(analysis).toJson());
+        }
         return json;
     }
 

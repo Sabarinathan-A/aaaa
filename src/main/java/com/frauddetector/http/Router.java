@@ -45,6 +45,10 @@ public final class Router implements HttpHandler {
         return register("DELETE", template, handler);
     }
 
+    public Router patch(String template, Route.Handler handler) {
+        return register("PATCH", template, handler);
+    }
+
     @Override
     public void handle(HttpExchange exchange) {
         HttpContext ctx = new HttpContext(exchange);
