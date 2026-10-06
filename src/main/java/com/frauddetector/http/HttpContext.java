@@ -111,6 +111,20 @@ public final class HttpContext {
         return exchange.getRequestHeaders().getFirst(name);
     }
 
+    /** Best-effort remote client address (host:port) for audit logging. */
+    public String remoteAddress() {
+        try {
+            if (exchange.getRemoteAddress() == null) {
+                return null;
+            }
+            return exchange.getRemoteAddress().getAddress() == null
+                    ? exchange.getRemoteAddress().toString()
+                    : exchange.getRemoteAddress().getAddress().getHostAddress();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private void readBody() {
         bodyRead = true;
         try (InputStream in = exchange.getRequestBody()) {

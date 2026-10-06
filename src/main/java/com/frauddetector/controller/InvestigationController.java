@@ -9,6 +9,7 @@ import com.frauddetector.http.Router;
 import com.frauddetector.security.AuthFilter;
 import com.frauddetector.security.Principal;
 import com.frauddetector.security.Role;
+import com.frauddetector.service.AuditService;
 import com.frauddetector.service.ClaimService;
 import com.frauddetector.service.InvestigationService;
 
@@ -36,12 +37,15 @@ public final class InvestigationController {
     private final InvestigationService investigationService;
     private final ClaimService claimService;
     private final AuthFilter authFilter;
+    private final AuditService auditService;
 
     public InvestigationController(InvestigationService investigationService,
-                                   ClaimService claimService, AuthFilter authFilter) {
+                                   ClaimService claimService, AuthFilter authFilter,
+                                   AuditService auditService) {
         this.investigationService = investigationService;
         this.claimService = claimService;
         this.authFilter = authFilter;
+        this.auditService = auditService;
     }
 
     public void register(Router router) {
@@ -77,11 +81,15 @@ public final class InvestigationController {
     }
 
     private Object decide(HttpContext ctx) {
-        authFilter.requireRole(ctx, Role.INVESTIGATOR, Role.ADMIN);
+        Principal principal = authFilter.requireRole(ctx, Role.INVESTIGATOR, Role.ADMIN);
         Map<String, Object> body = ctx.body();
         String decision = str(body, "decision");
         String notes = str(body, "notes");
         Investigation updated = investigationService.decide(ctx.pathParam("id"), decision, notes);
+        if (auditService != null) {
+            auditService.record(principal.userId(), AuditService.ACTION_INVESTIGATION_DECISION,
+                    updated.getInvestigationId(), ctx.remoteAddress());
+        }
         ctx.respond(200, InvestigationResponse.of(updated).toJson());
         return null;
     }
