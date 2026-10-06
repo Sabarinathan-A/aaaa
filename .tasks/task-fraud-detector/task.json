@@ -1,7 +1,21 @@
 {
   "task_id": "task-fraud-detector",
   "task_description": "Build the Medical Claim Fraud & Inflated Billing Detector (PRD v1.0) as a Java backend. Due to the INTEGRATIONS_ONLY sandbox (no reachable package registry, no artifact cache), it is implemented as a pure-JDK application (no Spring Boot / no external JARs): HTTP + JSON micro-framework over com.sun.net.httpserver, in-memory repositories, JDK-crypto security, and a dependency-free multi-layer explainable fraud-scoring engine (PRD 'Option B' taken to its dependency-free extreme). Delivered in PRD MVP phases: Phase 1 vertical slice first, then the ML engine + explainability + investigation, then dashboard/reports/audit/notifications.",
-  "status": "in_progress",
+  "status": "completed",
   "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
-  "blocked_reason": null
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "./build.sh clean build exits 0 and produces out/app.jar; ./build.sh test = 16 passed, 0 failed (incl. the RepeatInflationTest regression added in the fix pass). No external imports (org.springframework/com.fasterxml/org.junit/weka/tribuo all absent) - confirms the pure-JDK constraint. Live server verified across all four PRD phases: /api/health UP, login returns a signed token, claim submit/validate (400 date-order, 409 duplicate, 401/404), fraud analysis + explainable risk factors, high-risk list, investigation role gating (403/200), dashboard KPIs + chart data, reports, audit (ADMIN-only), notifications. Test quality reviewed: tests exercise real service logic over real repositories and assert computed outputs/classification boundaries, not static values. docker_build skipped: no Dockerfile and INTEGRATIONS_ONLY network blocks image pulls."
+  },
+  "semantic_review": {
+    "iterations": 2,
+    "final_verdict": "APPROVED",
+    "v1_review": ".tasks/task-fraud-detector/2026-10-06-164005-review.md",
+    "v2_review": ".tasks/task-fraud-detector/2026-10-06-165339-review.md",
+    "notes": "v1 APPROVED with 6 findings; the 2 substantive ones (billing-baseline contamination causing repeat-inflation score decay + savings KPI reading 0) plus security hardening (#3 APP_SECRET fail-fast, #4 dev-gated seeding) and the regression test (#6) were fixed in commit 87a6944. v2 re-review APPROVED, confirmed fixes resolve the root cause with no regressions and the regression test fails when the fix is neutralized. One informational non-blocking note remains: per-claim scores are frozen at submit time (benign - KPI readers recompute live against the clean baseline). TLS (#5) is a documented reverse-proxy deferral given the network-isolated sandbox."
+  }
 }
