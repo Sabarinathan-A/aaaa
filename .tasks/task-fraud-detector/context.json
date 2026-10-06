@@ -1,0 +1,25 @@
+{
+  "project_type": "Java backend web application (Spring-Boot-shaped layered architecture) implementing an AI/ML medical claim fraud and inflated-billing detector. Delivered as a pure JDK application because no dependency registry is reachable in the sandbox.",
+  "language": "Java 25 (OpenJDK 25.0.2)",
+  "build_system": "Maven 3.9.16 is installed but Maven Central is BLOCKED (HTTP 403 via squid proxy) and there is no local ~/.m2 cache, so Maven/Gradle dependency resolution fails. The project is therefore built with plain javac + jar driven by a committed POSIX shell script (build.sh). No external JARs. A pom.xml is still committed for documentation/portability but is NOT the sandbox build path.",
+  "test_framework": "Hand-rolled zero-dependency test harness (JUnit cannot be downloaded). Tests are plain Java classes with main() methods and an assertion helper (src/test). Run via build.sh test which compiles and runs them, exiting non-zero on failure.",
+  "build_command": "cd /projects/sandbox/aaaa && ./build.sh build  (compiles src/main with javac into out/ and packages app.jar via jar)",
+  "test_command": "cd /projects/sandbox/aaaa && ./build.sh test  (compiles + runs all test classes; non-zero exit on any failed assertion)",
+  "verification_instructions": "1) ./build.sh clean build -> compiles with no errors and produces out/app.jar. 2) ./build.sh test -> all test classes pass (exit 0). 3) ./build.sh run & then curl the running server: POST /api/auth/login to get a token, POST /api/claims to submit a claim, GET /api/claims/{id} to read back the fraud analysis, GET /api/dashboard for KPIs. Server uses com.sun.net.httpserver on port 8080.",
+  "snapshot_or_generated_files": "None checked in. out/ and app.jar are build artifacts and must be gitignored.",
+  "setup_instructions": "No setup/downloads needed. JDK 25 (javac/jar/jlink) is on PATH via mise. Just run ./build.sh. Do NOT attempt mvn/gradle online builds - registries are unreachable.",
+  "environment_constraints": "NETWORK = INTEGRATIONS_ONLY. Confirmed by smoke test: repo.maven.apache.org returns 403; repo1.maven.org, plugins.gradle.org, maven.aliyun.com, and even github.com return 000 (blocked). No ~/.m2/repository and no ~/.gradle/caches. CONSEQUENCE: cannot use Spring Boot, cannot use a Python ML microservice (no PyPI for scikit-learn), cannot use H2/Postgres/MySQL JARs, cannot download JUnit. ALL functionality must use only the JDK standard library: com.sun.net.httpserver (jdk.httpserver module) for the HTTP/API layer, java.net.http, java.util.* for in-memory persistence, javax/java crypto (MessageDigest, Mac/HmacSHA256) for password hashing and signed tokens, and the java.base/java.sql modules. This is the PRD's 'Option B - Java-only ML' path, taken to its dependency-free extreme.",
+  "contribution_requirements": "No CONTRIBUTING.md (empty repo). Follow PRD section 28 layered architecture (controller / service / repository / entity / dto / security / ml). Honor PRD section 36 MVP phasing: Phase 1 vertical slice first.",
+  "key_patterns": "Layered packages under com.frauddetector: config, http (micro-framework over HttpServer: Router, HttpContext, JSON codec), security (PasswordHasher, TokenService, Role, AuthFilter, AuditLog), domain/entity (User, Patient, Provider, Claim, Billing, FraudAnalysis, RiskFactor, Investigation), repository (in-memory thread-safe repos backed by ConcurrentHashMap), dto, service (ClaimService, ValidationService, FeatureService, ml.* scorers, FraudRiskService), controller (AuthController, ClaimController, DashboardController). Hand-written minimal JSON serializer/parser since Jackson is unavailable.",
+  "relevant_files": [
+    "/projects/sandbox/aaaa/build.sh",
+    "/projects/sandbox/aaaa/pom.xml",
+    "/projects/sandbox/aaaa/README.md",
+    "/projects/sandbox/aaaa/.gitignore",
+    "/projects/sandbox/aaaa/src/main/java/com/frauddetector/App.java",
+    "/projects/sandbox/aaaa/src/main/java/com/frauddetector/http/",
+    "/projects/sandbox/aaaa/src/main/java/com/frauddetector/service/ml/",
+    "/projects/sandbox/aaaa/src/test/java/com/frauddetector/"
+  ],
+  "directory_structure": "aaaa/ (repo root). build.sh = pure-JDK build/test/run driver. pom.xml = documentation of intended Maven coordinates (not used in sandbox). src/main/java/com/frauddetector/ = application (http micro-framework, security, domain, repository, service incl. ml scorers, controller, config seed data). src/test/java/com/frauddetector/ = zero-dep test harness + tests. out/ = compiled classes + app.jar (gitignored)."
+}
