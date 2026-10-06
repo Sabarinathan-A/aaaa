@@ -47,7 +47,12 @@ public final class DashboardService {
         this.analyses = analyses;
         this.providers = providers;
         this.thresholds = thresholds;
-        this.billingAnomalyService = new BillingAnomalyService(claims);
+        // Use the clean-baseline billing analyzer so potentialSavings is measured
+        // against the legitimate population, not against the inflated claims
+        // themselves (review findings #1/#2).
+        this.billingAnomalyService = new BillingAnomalyService(
+                claims, analyses, thresholds,
+                new com.frauddetector.service.ml.DuplicateDetector(claims));
     }
 
     /** Build the full dashboard payload (KPI cards + chart datasets). */

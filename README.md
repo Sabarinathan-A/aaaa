@@ -153,9 +153,19 @@ Requirements: a JDK on `PATH` (developed against OpenJDK 25). No downloads.
 ### Running and calling the API
 
 The default port is `8080`; override with the `PORT` env var. Other env
-overrides: `APP_SECRET`, `TOKEN_TTL_SECONDS`, and the `ThresholdConfig` vars
-(`RISK_LOW_MAX`, `RISK_MEDIUM_MAX`, `RISK_HIGH_MAX`, `BILLING_ANOMALY_THRESHOLD`,
-`DUPLICATE_THRESHOLD`).
+overrides: `APP_SECRET`, `TOKEN_TTL_SECONDS`, `APP_ENV`, and the
+`ThresholdConfig` vars (`RISK_LOW_MAX`, `RISK_MEDIUM_MAX`, `RISK_HIGH_MAX`,
+`BILLING_ANOMALY_THRESHOLD`, `DUPLICATE_THRESHOLD`).
+
+**Profiles and secrets.** `APP_ENV` selects the runtime profile. When it is
+unset or `dev` (the default, used for the sandbox demo) the server runs the demo
+**seed** (four known-credential accounts printed to stdout plus reference
+patients/providers/claims) and, if `APP_SECRET` is unset, falls back to a
+built-in dev token secret with a warning. In any other profile (e.g.
+`APP_ENV=prod`) the demo seed is **disabled** (the stores start empty, so no
+known-credential account exists) and the server **refuses to start** unless
+`APP_SECRET` is set, so a real deployment can never mint tokens from the
+publicly-known dev secret.
 
 ```sh
 PORT=18080 ./build.sh run &

@@ -56,12 +56,25 @@ public final class FraudRiskService {
 
     public FraudRiskService(ClaimRepository claims, PatientRepository patients,
                             ThresholdConfig thresholds) {
+        this(claims, patients, null, thresholds);
+    }
+
+    /**
+     * Full constructor. When an {@link com.frauddetector.repository.FraudAnalysisRepository}
+     * is supplied, the billing layer excludes already-flagged claims from its
+     * "normal" baseline in addition to near-duplicates, so a cluster of identical
+     * inflated claims cannot define its own baseline (review findings #1/#2).
+     */
+    public FraudRiskService(ClaimRepository claims, PatientRepository patients,
+                            com.frauddetector.repository.FraudAnalysisRepository analyses,
+                            ThresholdConfig thresholds) {
         this.thresholds = thresholds;
         this.featureService = new FeatureService(claims, patients);
         this.fraudClassifier = new FraudClassifier();
         this.anomalyDetector = new AnomalyDetector(claims, patients);
-        this.billingAnomalyService = new BillingAnomalyService(claims);
         this.duplicateDetector = new DuplicateDetector(claims);
+        this.billingAnomalyService =
+                new BillingAnomalyService(claims, analyses, thresholds, duplicateDetector);
         this.providerRiskService = new ProviderRiskService(claims, duplicateDetector);
         this.patientRiskService = new PatientRiskService(claims);
     }

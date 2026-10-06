@@ -49,7 +49,12 @@ public final class ReportService {
         this.providers = providers;
         this.investigations = investigations;
         this.thresholds = thresholds;
-        this.billingAnomalyService = new BillingAnomalyService(claims);
+        // Use the clean-baseline billing analyzer so potentialBillingInflation is
+        // measured against the legitimate population, not against the inflated
+        // claims themselves (review findings #1/#2).
+        this.billingAnomalyService = new BillingAnomalyService(
+                claims, analyses, thresholds,
+                new com.frauddetector.service.ml.DuplicateDetector(claims));
     }
 
     /** Single-claim report (id, patient, provider, treatment, amount, risk, factors, investigation). */

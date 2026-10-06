@@ -103,7 +103,8 @@ public final class App {
         // Services.
         ThresholdConfig thresholds = ThresholdConfig.fromEnv();
         ValidationService validation = new ValidationService(patients, providers, claims);
-        FraudRiskService fraudRiskService = new FraudRiskService(claims, patients, thresholds);
+        FraudRiskService fraudRiskService =
+                new FraudRiskService(claims, patients, analyses, thresholds);
         AuditService auditService = new AuditService(auditLogs);
         NotificationService notificationService = new NotificationService(notifications);
         ClaimService claimService = new ClaimService(claims, validation, fraudRiskService, analyses);
@@ -130,25 +131,57 @@ public final class App {
         new NotificationController(notificationService, authFilter).register(router);
         new ProviderController(providerService, authFilter).register(router);
 
-        // Seed data + print credentials for manual testing.
-        List<Seed.Credential> credentials =
-                new Seed(users, patients, providers, claims, hasher).load();
-        // Record a USER_CREATE audit entry per seeded account (PRD section 31).
-        for (com.frauddetector.domain.User user : users.findAll()) {
-            auditService.record("SYSTEM", AuditService.ACTION_USER_CREATE, user.getId(), null);
+        // Seed demo data only under the dev profile. The seed creates four
+        // fixed accounts with known passwords printed to stdout, which is fine
+        // for the sandbox demo but must never run in a real deployment (review
+        // finding #4). In a non-dev profile, start with empty stores so no
+        // known-credential account exists.
+        if (isDevProfile()) {
+            List<Seed.Credential> credentials =
+                    new Seed(users, patients, providers, claims, hasher).load();
+            // Record a USER_CREATE audit entry per seeded account (PRD section 31).
+            for (com.frauddetector.domain.User user : users.findAll()) {
+                auditService.record("SYSTEM", AuditService.ACTION_USER_CREATE, user.getId(), null);
+            }
+            // Recompute provider risk scores now that seed claims exist.
+            providerService.recomputeAll();
+            Seed.printCredentials(credentials);
+        } else {
+            System.out.println("Non-dev profile (APP_ENV=" + System.getenv("APP_ENV")
+                    + "): demo seeding disabled.");
         }
-        // Recompute provider risk scores now that seed claims exist.
-        providerService.recomputeAll();
-        Seed.printCredentials(credentials);
     }
 
+    /** Dev-only token secret, used only when {@code APP_ENV=dev} and APP_SECRET is unset. */
+    static final String DEV_SECRET = "fraud-detector-dev-secret-change-me";
+
+    /**
+     * Resolve the HMAC token secret. A real deployment MUST set {@code APP_SECRET};
+     * if it is unset we only fall back to the committed dev secret when
+     * {@code APP_ENV} is {@code dev} (or unset, which keeps the sandbox/demo
+     * experience). In any other profile (e.g. {@code APP_ENV=prod}) a missing
+     * {@code APP_SECRET} fails fast rather than silently minting forgeable tokens
+     * from a public string (review finding #3).
+     */
     private static String resolveSecret() {
         String env = System.getenv("APP_SECRET");
         if (env != null && !env.isBlank()) {
             return env.trim();
         }
-        // Dev-only default; override with APP_SECRET in any real deployment.
-        return "fraud-detector-dev-secret-change-me";
+        if (isDevProfile()) {
+            System.err.println("WARNING: APP_SECRET is not set; using the built-in dev secret. "
+                    + "Set APP_SECRET before any real deployment.");
+            return DEV_SECRET;
+        }
+        throw new IllegalStateException(
+                "APP_SECRET must be set when APP_ENV is not 'dev' (refusing to start with a "
+                        + "publicly-known token secret). Set APP_SECRET, or set APP_ENV=dev for local use.");
+    }
+
+    /** True when running under the dev profile: APP_ENV unset or equal to "dev". */
+    private static boolean isDevProfile() {
+        String profile = System.getenv("APP_ENV");
+        return profile == null || profile.isBlank() || "dev".equalsIgnoreCase(profile.trim());
     }
 
     private static long resolveTokenTtl() {

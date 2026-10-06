@@ -1,7 +1,10 @@
 package com.frauddetector.service.ml;
 
+import com.frauddetector.config.ThresholdConfig;
 import com.frauddetector.domain.Claim;
+import com.frauddetector.domain.FraudAnalysis;
 import com.frauddetector.repository.ClaimRepository;
+import com.frauddetector.repository.FraudAnalysisRepository;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -21,13 +24,46 @@ import java.util.List;
  *
  * <p>With too few history points for a stable stddev, the detector falls back to
  * a min/max range check so a wildly out-of-range amount is still flagged.
+ *
+ * <p><b>Clean baseline (review findings #1/#2).</b> The historical "normal" range
+ * must not be contaminated by the fraudulent claims it is meant to catch,
+ * otherwise a cluster of identical inflated claims erodes its own signal: the
+ * second and later copies see the first copies as "normal", so their billing
+ * anomaly (and the derived savings/inflation KPIs) collapse toward zero. When
+ * this service is given a {@link FraudAnalysisRepository}, a {@link ThresholdConfig}
+ * and a {@link DuplicateDetector}, it excludes from the baseline any claim that is
+ * already flagged HIGH/CRITICAL or is a near-duplicate of the claim under
+ * analysis. The baseline therefore reflects the clean/legitimate population only,
+ * and repeat inflation can no longer dilute its own detection.
  */
 public final class BillingAnomalyService {
 
     private final ClaimRepository claims;
+    private final FraudAnalysisRepository analyses;
+    private final ThresholdConfig thresholds;
+    private final DuplicateDetector duplicateDetector;
 
+    /**
+     * Minimal constructor used by unit tests and callers that only need the core
+     * {@link #analyze(double, List)} computation over an explicit history. With no
+     * analysis repository or duplicate detector, no baseline filtering is applied.
+     */
     public BillingAnomalyService(ClaimRepository claims) {
+        this(claims, null, null, null);
+    }
+
+    /**
+     * Full constructor with clean-baseline filtering. Already-flagged
+     * (HIGH/CRITICAL) claims and near-duplicates of the claim under analysis are
+     * excluded from the historical "normal" population so repeat inflation does
+     * not erase its own signal.
+     */
+    public BillingAnomalyService(ClaimRepository claims, FraudAnalysisRepository analyses,
+                                 ThresholdConfig thresholds, DuplicateDetector duplicateDetector) {
         this.claims = claims;
+        this.analyses = analyses;
+        this.thresholds = thresholds;
+        this.duplicateDetector = duplicateDetector;
     }
 
     /** Result of a billing-anomaly comparison. */
@@ -55,10 +91,15 @@ public final class BillingAnomalyService {
         }
     }
 
-    /** Analyze a persisted claim (excluding itself from the historical population). */
+    /**
+     * Analyze a persisted claim against the historical "normal" population,
+     * excluding the claim itself and (when the clean-baseline collaborators are
+     * wired) any already-flagged or near-duplicate claim so repeat inflation
+     * cannot dilute its own signal.
+     */
     public Result analyze(Claim claim) {
         double amount = toDouble(claim.getTotalBilledAmount());
-        List<Double> history = historicalAmounts(claim.getProcedure(), claim.getProviderId(), claim.getClaimId());
+        List<Double> history = historicalAmounts(claim);
         return analyze(amount, history);
     }
 
@@ -103,12 +144,22 @@ public final class BillingAnomalyService {
                 history.size(), zScore);
     }
 
-    private List<Double> historicalAmounts(String procedure, String providerId, String excludeClaimId) {
+    private List<Double> historicalAmounts(Claim target) {
+        String procedure = target.getProcedure();
+        String providerId = target.getProviderId();
+        String excludeClaimId = target.getClaimId();
         // Prefer same-procedure history; if too thin, fall back to same provider.
         List<Double> byProcedure = new ArrayList<>();
         List<Double> byProvider = new ArrayList<>();
         for (Claim c : claims.findAll()) {
             if (c.getClaimId().equals(excludeClaimId)) {
+                continue;
+            }
+            // Keep the "normal" baseline clean: a claim that is itself already
+            // flagged as fraud, or a near-duplicate of the claim under analysis,
+            // must not define what "normal" billing looks like. Excluding them
+            // stops repeat inflation from eroding its own signal (review #1/#2).
+            if (isContaminating(target, c)) {
                 continue;
             }
             double amt = toDouble(c.getTotalBilledAmount());
@@ -126,6 +177,28 @@ public final class BillingAnomalyService {
             return byProcedure;
         }
         return byProvider;
+    }
+
+    /**
+     * A historical claim is "contaminating" (and so excluded from the normal
+     * baseline) if it is already flagged HIGH/CRITICAL, or if it is a
+     * near-duplicate of the claim under analysis. No-ops when the optional
+     * clean-baseline collaborators are not wired.
+     */
+    private boolean isContaminating(Claim target, Claim candidate) {
+        if (analyses != null && thresholds != null) {
+            FraudAnalysis a = analyses.findByClaimId(candidate.getClaimId()).orElse(null);
+            if (a != null && thresholds.isHighRisk(a.getRiskLevel())) {
+                return true;
+            }
+        }
+        if (duplicateDetector != null && thresholds != null) {
+            double sim = duplicateDetector.similarity(target, candidate);
+            if (sim >= thresholds.getDuplicateThreshold()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static double mean(List<Double> values) {
