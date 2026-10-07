@@ -27,6 +27,7 @@ public final class NotificationService {
 
     private final NotificationRepository repository;
     private final boolean notifyOnHigh;
+    private final List<ExternalNotifier> externalNotifiers = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public NotificationService(NotificationRepository repository) {
         this(repository, true);
@@ -55,16 +56,40 @@ public final class NotificationService {
         String message = String.format(
                 "Claim %s was classified %s (risk score %.1f) and needs investigator review.",
                 claim.getClaimId(), level, analysis.getFinalRiskScore());
+        return notify(Role.INVESTIGATOR, TYPE_HIGH_RISK_CLAIM, message, claim.getClaimId(), level);
+    }
+
+    /**
+     * Create an in-app notification for {@code role} and hand it to every
+     * registered external notifier (email outbox, webhook). External delivery
+     * failures never block the in-app record.
+     */
+    public Notification notify(Role role, String type, String message, String claimId, String severity) {
         Notification notification = new Notification(
-                "NOT-" + UUID.randomUUID(),
-                Role.INVESTIGATOR,
-                TYPE_HIGH_RISK_CLAIM,
-                message,
-                claim.getClaimId(),
-                level,
-                false,
-                Instant.now());
-        return repository.save(notification);
+                "NOT-" + UUID.randomUUID(), role, type, message, claimId, severity, false, Instant.now());
+        repository.save(notification);
+        for (ExternalNotifier notifier : externalNotifiers) {
+            try {
+                notifier.deliver(notification);
+            } catch (RuntimeException e) {
+                System.err.println("WARN: external notifier " + notifier.name() + " failed: " + e.getMessage());
+            }
+        }
+        return notification;
+    }
+
+    /** Register an external delivery channel (see {@link ExternalNotifier}). */
+    public void addExternalNotifier(ExternalNotifier notifier) {
+        if (notifier != null) {
+            externalNotifiers.add(notifier);
+        }
+    }
+
+    /** Pluggable out-of-app delivery channel for notifications. */
+    public interface ExternalNotifier {
+        String name();
+
+        void deliver(Notification notification);
     }
 
     /** Notifications targeted at the caller's role, newest-first. */

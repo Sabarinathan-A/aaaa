@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medical Claim Fraud Detector</title>
+<style>
+  :root {
+    --bg: #f4f6fa; --panel: #fff; --text: #1d2433; --muted: #5b6475; --line: #dde2ea;
+    --brand: #2453c7; --brand-d: #1b3f99; --ok: #1d7a46; --warn: #a86500; --high: #c2410c; --crit: #b91c1c;
+    --low-bg: #e3f4ea; --med-bg: #fdf1d8; --high-bg: #fde4d6; --crit-bg: #fbdcdc;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  a { color: var(--brand); }
+  header { background: #13234d; color: #fff; display: flex; align-items: center; gap: 16px; padding: 10px 20px; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .who { margin-left: auto; font-size: 13px; opacity: .9; display: flex; gap: 10px; align-items: center; }
+  header button { background: transparent; color: #fff; border: 1px solid #ffffff66; }
+  .layout { display: flex; min-height: calc(100vh - 48px); }
+  nav { width: 210px; background: var(--panel); border-right: 1px solid var(--line); padding: 12px 0; flex-shrink: 0; }
+  nav a { display: flex; justify-content: space-between; padding: 8px 18px; color: var(--text); text-decoration: none; }
+  nav a:hover, nav a:focus { background: #eef2fb; outline: none; }
+  nav a.active { background: #e3eafc; color: var(--brand-d); font-weight: 600; border-left: 3px solid var(--brand); padding-left: 15px; }
+  nav .sec { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px 18px 4px; }
+  main { flex: 1; padding: 20px 26px; min-width: 0; }
+  h2 { margin: 0 0 14px; font-size: 20px; }
+  h3 { margin: 18px 0 8px; font-size: 15px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .grid { display: grid; gap: 14px; }
+  .g4 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+  .kpi .v { font-size: 26px; font-weight: 700; }
+  .kpi .l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); }
+  th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; background: #f8f9fc; }
+  tr.click { cursor: pointer; }
+  tr.click:hover, tr.click:focus { background: #f1f5fe; outline: none; }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  form.row, .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+  input, select, textarea { font: inherit; padding: 6px 8px; border: 1px solid #b9c1cf; border-radius: 5px; background: #fff; color: var(--text); min-width: 120px; }
+  textarea { min-height: 60px; width: 100%; }
+  input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+  button { font: inherit; padding: 7px 13px; border-radius: 5px; border: 1px solid var(--brand); background: var(--brand); color: #fff; cursor: pointer; }
+  button:hover { background: var(--brand-d); }
+  button.sec { background: #fff; color: var(--brand); }
+  button.sec:hover { background: #eef2fb; }
+  button.danger { background: var(--crit); border-color: var(--crit); }
+  button.okb { background: var(--ok); border-color: var(--ok); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .LOW { background: var(--low-bg); color: var(--ok); }
+  .MEDIUM { background: var(--med-bg); color: var(--warn); }
+  .HIGH { background: var(--high-bg); color: var(--high); }
+  .CRITICAL { background: var(--crit-bg); color: var(--crit); }
+  .st { background: #e8ecf3; color: #334; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .bar { height: 10px; background: #e8ecf3; border-radius: 5px; overflow: hidden; flex: 1; }
+  .bar > span { display: block; height: 100%; background: var(--brand); }
+  .barrow { display: flex; align-items: center; gap: 10px; margin: 5px 0; }
+  .barrow .lbl { width: 190px; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .barrow .val { width: 80px; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
+  .score { font-size: 46px; font-weight: 800; }
+  .flash { padding: 9px 12px; border-radius: 6px; margin-bottom: 12px; }
+  .flash.err { background: var(--crit-bg); color: var(--crit); }
+  .flash.ok { background: var(--low-bg); color: var(--ok); }
+  pre { background: #0f1729; color: #d8e1f5; padding: 12px; border-radius: 6px; overflow: auto; max-height: 420px; font-size: 12px; }
+  ul.factors { margin: 6px 0; padding-left: 20px; }
+  ul.factors li { margin: 4px 0; }
+  .login { max-width: 420px; margin: 60px auto; }
+  .kv { display: grid; grid-template-columns: 170px 1fr; gap: 4px 12px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .cm { border-collapse: collapse; width: auto; }
+  .cm td, .cm th { border: 1px solid var(--line); text-align: center; padding: 8px 14px; }
+  .sr { position: absolute; left: -9999px; }
+  .pill { background: var(--crit); color: #fff; border-radius: 9px; font-size: 11px; padding: 0 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Medical Claim Fraud &amp; Inflated Billing Detector</h1>
+  <div class="who" id="who"></div>
+</header>
+<div class="layout">
+  <nav id="nav" aria-label="Main navigation"></nav>
+  <main id="main" tabindex="-1"><p class="muted">Loading...</p></main>
+</div>
+<div id="live" class="sr" aria-live="polite"></div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- core helpers
+const S = { token: sessionStorage.getItem("fd.token"), role: sessionStorage.getItem("fd.role"), name: sessionStorage.getItem("fd.name"), userId: sessionStorage.getItem("fd.userId") };
+const $main = document.getElementById("main");
+
+/** Build a DOM element. Children may be strings (inserted as text, never HTML), nodes, arrays, or null. */
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "class") el.className = v;
+    else if (k === "style") el.style.cssText = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  const add = (c) => {
+    if (c === null || c === undefined || c === false) return;
+    if (Array.isArray(c)) c.forEach(add);
+    else el.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
+  };
+  kids.forEach(add);
+  return el;
+}
+function render(...nodes) { $main.replaceChildren(...nodes.flat().filter(Boolean)); $main.focus({ preventScroll: true }); }
+function say(msg) { document.getElementById("live").textContent = msg; }
+function flash(msg, ok) { return h("div", { class: "flash " + (ok ? "ok" : "err"), role: ok ? "status" : "alert" }, msg); }
+function money(v) { if (v === null || v === undefined || v === "") return "-"; const n = Number(v); return isNaN(n) ? String(v) : n.toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+function pct(v) { return v === null || v === undefined ? "-" : (Number(v) * 100).toFixed(1) + "%"; }
+function dt(v) { return v ? String(v).replace("T", " ").replace(/\.\d+Z$/, "Z") : "-"; }
+function level(l) { return l ? h("span", { class: "badge " + l }, l) : h("span", { class: "muted" }, "not scored"); }
+function status(s) { return s ? h("span", { class: "badge st" }, s) : "-"; }
+function has(...roles) { return roles.includes(S.role); }
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (S.token) opts.headers.Authorization = "Bearer " + S.token;
+  if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  const res = await fetch(path, opts);
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
+  if (res.status === 401 && S.token && !path.startsWith("/api/auth")) { logout(); throw new Error("Session expired, please log in again."); }
+  if (!res.ok) { const err = new Error((data && (data.error || data.message)) || ("HTTP " + res.status)); err.status = res.status; err.data = data; throw err; }
+  return data;
+}
+async function guard(fn) {
+  try { await fn(); } catch (e) { render(h("h2", {}, "Something went wrong"), flash(e.message)); }
+}
+
+/** Generic table: cols = [[header, row => cell], ...]. */
+function table(rows, cols, onRow) {
+  if (!rows || rows.length === 0) return h("p", { class: "muted" }, "No records.");
+  return h("div", { class: "tablewrap" }, h("table", {},
+    h("thead", {}, h("tr", {}, cols.map(c => h("th", { scope: "col" }, c[0])))),
+    h("tbody", {}, rows.map(r => h("tr", onRow ? { class: "click", tabindex: "0", onclick: () => onRow(r), onkeydown: (e) => { if (e.key === "Enter") onRow(r); } } : {},
+      cols.map(c => h("td", {}, c[1](r))))))));
+}
+function bars(items, labelOf, valueOf, fmt) {
+  if (!items || items.length === 0) return h("p", { class: "muted" }, "No data.");
+  const max = Math.max(...items.map(i => Number(valueOf(i)) || 0), 1e-9);
+  return h("div", { role: "list" }, items.map(i => {
+    const v = Number(valueOf(i)) || 0;
+    return h("div", { class: "barrow", role: "listitem" },
+      h("span", { class: "lbl", title: labelOf(i) }, labelOf(i)),
+      h("span", { class: "bar", "aria-hidden": "true" }, h("span", { style: "width:" + (100 * v / max).toFixed(1) + "%" })),
+      h("span", { class: "val" }, fmt ? fmt(v, i) : String(v)));
+  }));
+}
+function field(label, input) { return h("label", {}, label, input); }
+function inp(name, value, attrs) { return h("input", Object.assign({ name, value: value === undefined || value === null ? "" : value }, attrs || {})); }
+function sel(name, options, value) { return h("select", { name }, options.map(o => { const [v, t] = Array.isArray(o) ? o : [o, o === "" ? "Any" : o]; return h("option", { value: v, selected: String(v) === String(value ?? "") }, t); })); }
+function formData(form) { const o = {}; new FormData(form).forEach((v, k) => { o[k] = typeof v === "string" ? v.trim() : v; }); return o; }
+function qs(o) { const p = new URLSearchParams(); Object.entries(o).forEach(([k, v]) => { if (v !== "" && v !== undefined && v !== null) p.set(k, v); }); const s = p.toString(); return s ? "?" + s : ""; }
+function go(hash) { location.hash = hash; }
+function back(label, hash) { return h("p", {}, h("a", { href: hash }, "\u2190 " + label)); }
+
+// ---------------------------------------------------------------- auth
+function saveSession(res, me) {
+  Object.assign(S, { token: res.token, role: res.role, name: res.name, userId: me ? me.id : null });
+  for (const k of ["token", "role", "name", "userId"]) S[k] ? sessionStorage.setItem("fd." + k, S[k]) : sessionStorage.removeItem("fd." + k);
+}
+function logout() {
+  api("POST", "/api/auth/logout").catch(() => {});
+  ["token", "role", "name", "userId"].forEach(k => { S[k] = null; sessionStorage.removeItem("fd." + k); });
+  go("#/login"); route();
+}
+async function doLogin(email, password, errBox) {
+  try {
+    const res = await api("POST", "/api/auth/login", { email, password });
+    S.token = res.token;
+    const me = await api("GET", "/api/me");
+    saveSession(res, me);
+    go("#/dashboard"); route();
+  } catch (e) { errBox.replaceChildren(flash(e.message)); }
+}
+function pageLogin() {
+  const err = h("div");
+  const demo = [["Admin", "admin@fraud.local", "admin123"], ["Claim officer", "officer@fraud.local", "officer123"],
+    ["Investigator", "investigator@fraud.local", "investigate123"], ["Provider", "provider@fraud.local", "provider123"]];
+  const form = h("form", { onsubmit: (e) => { e.preventDefault(); const d = formData(form); doLogin(d.email, d.password, err); } },
+    h("div", { class: "grid" },
+      field("Email", inp("email", "", { type: "email", required: true, autocomplete: "username" })),
+      field("Password", inp("password", "", { type: "password", required: true, autocomplete: "current-password" })),
+      h("button", { type: "submit" }, "Log in")));
+  render(h("div", { class: "login" },
+    h("div", { class: "panel" }, h("h2", {}, "Sign in"), err, form),
+    h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Demo accounts (dev profile)"),
+      h("p", { class: "muted small" }, "One click logs in with the seeded account."),
+      h("div", { class: "row" }, demo.map(([label, e, p]) => h("button", { class: "sec", type: "button", onclick: () => doLogin(e, p, err) }, label))))));
+}
+
+// ---------------------------------------------------------------- navigation
+const PAGES = [
+  ["Overview", null],
+  ["#/dashboard", "Dashboard", null],
+  ["#/notifications", "Notifications", null],
+  ["Claims", null],
+  ["#/claims", "All claims", null],
+  ["#/submit", "Submit claim", ["PROVIDER", "CLAIM_OFFICER", "ADMIN"]],
+  ["#/high-risk", "High-risk claims", null],
+  ["Fraud detection", null],
+  ["#/investigations", "Investigations", ["INVESTIGATOR", "ADMIN", "CLAIM_OFFICER"]],
+  ["#/model", "ML model", ["ADMIN", "CLAIM_OFFICER", "INVESTIGATOR"]],
+  ["Registry", null],
+  ["#/patients", "Patients", null],
+  ["#/providers", "Providers", null],
+  ["Analytics", null],
+  ["#/reports", "Reports", ["ADMIN", "CLAIM_OFFICER"]],
+  ["#/audit", "Audit log", ["ADMIN"]],
+  ["Settings", null],
+  ["#/users", "Users", ["ADMIN"]],
+  ["#/profile", "Profile", null],
+  ["#/console", "API console", null]
+];
+let unread = 0;
+function drawNav() {
+  const nav = document.getElementById("nav");
+  const who = document.getElementById("who");
+  if (!S.token) { nav.replaceChildren(); who.replaceChildren(); return; }
+  const cur = location.hash.split("?")[0].split("/").slice(0, 2).join("/");
+  const items = [];
+  let pendingSection = null;
+  for (const p of PAGES) {
+    if (p.length === 2) { pendingSection = p[0]; continue; }
+    const [hash, label, roles] = p;
+    if (roles && !roles.includes(S.role)) continue;
+    if (pendingSection) { items.push(h("div", { class: "sec" }, pendingSection)); pendingSection = null; }
+    items.push(h("a", { href: hash, class: cur === hash ? "active" : null, "aria-current": cur === hash ? "page" : null }, label,
+      hash === "#/notifications" && unread > 0 ? h("span", { class: "pill", "aria-label": unread + " unread" }, unread) : null));
+  }
+  nav.replaceChildren(...items);
+  who.replaceChildren(h("span", {}, S.name + " \u00b7 " + S.role), h("button", { type: "button", onclick: logout }, "Log out"));
+}
+async function refreshUnread() {
+  if (!S.token) return;
+  try { const n = await api("GET", "/api/notifications?unread=true"); unread = (n || []).length; drawNav(); } catch (e) { /* ignore */ }
+}
+
+const ROUTES = {
+  login: pageLogin, dashboard: pageDashboard, notifications: pageNotifications, claims: pageClaims, claim: pageClaim,
+  submit: pageSubmit, edit: pageEdit, "high-risk": pageHighRisk, investigations: pageInvestigations, investigation: pageInvestigation,
+  model: pageModel, patients: pagePatients, patient: pagePatient, providers: pageProviders, provider: pageProvider,
+  reports: pageReports, audit: pageAudit, users: pageUsers, profile: pageProfile, console: pageConsole
+};
+function route() {
+  const parts = (location.hash || "#/dashboard").slice(2).split("?")[0].split("/").map(decodeURIComponent);
+  if (!S.token && parts[0] !== "login") { go("#/login"); return route(); }
+  if (S.token && parts[0] === "login") { go("#/dashboard"); return route(); }
+  drawNav();
+  const fn = ROUTES[parts[0]] || pageDashboard;
+  guard(() => fn(...parts.slice(1)));
+}
+window.addEventListener("hashchange", route);
+
+// ---------------------------------------------------------------- dashboard
+async function pageDashboard() {
+  const d = await api("GET", "/api/dashboard");
+  const k = d.kpis || {}, c = d.charts || {};
+  render(h("h2", {}, "Dashboard"),
+    h("div", { class: "grid g4" },
+      [["Total claims", k.totalClaims], ["Flagged claims", k.flaggedClaims], ["High risk", k.highRiskClaims], ["Potential savings", money(k.potentialSavings)]]
+        .map(([l, v]) => h("div", { class: "kpi" }, h("div", { class: "l" }, l), h("div", { class: "v" }, v ?? "-")))),
+    h("div", { class: "grid g2", style: "margin-top:16px" },
+      chart("Claims per month", c.claimsOverTimeByMonth, i => i.period, i => i.count),
+      chart("Fraud trend (flagged per month)", c.fraudTrendByMonth, i => i.period, i => i.flagged, (v, i) => v + " / " + i.total),
+      chart("Provider risk ranking", c.providerRiskRanking, i => i.providerName + " (" + i.providerId + ")", i => i.riskScore, v => v.toFixed(3)),
+      chart("Claim amount distribution", c.claimAmountDistribution, i => i.bucket, i => i.count),
+      chart("Fraud vs legitimate", c.fraudVsLegitimate, i => i.label, i => i.count),
+      chart("High-risk procedures", c.highRiskProcedures, i => i.procedure, i => i.flagged, (v, i) => v + " / " + i.total),
+      chart("Geographic distribution", c.geographicDistribution, i => i.location, i => i.count),
+      chart("Claims per day (recent)", (c.claimsOverTimeByDay || []).slice(-12), i => i.period, i => i.count)));
+}
+function chart(title, items, l, v, fmt) { return h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, title), bars(items, l, v, fmt)); }
+
+// ---------------------------------------------------------------- claims
+const CLAIM_COLS = [
+  ["Claim", r => r.claimId], ["Date", r => r.claimDate], ["Patient", r => r.patientId], ["Provider", r => r.providerId],
+  ["Procedure", r => r.procedure], ["Amount", r => money(r.totalBilledAmount)],
+  ["Risk", r => r.fraudAnalysis ? h("span", {}, level(r.fraudAnalysis.riskLevel), " ", String(r.fraudAnalysis.finalRiskScore)) : level(null)],
+  ["Status", r => status(r.claimStatus)]
+];
+async function pageClaims() {
+  const params = Object.fromEntries(new URLSearchParams(location.hash.split("?")[1] || ""));
+  const form = h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); go("#/claims?" + qs(formData(form)).slice(1)); } },
+    field("Claim ID", inp("claimId", params.claimId)), field("Patient ID", inp("patientId", params.patientId)),
+    field("Provider ID", inp("providerId", params.providerId)), field("Hospital", inp("hospital", params.hospital)),
+    field("Diagnosis", inp("diagnosis", params.diagnosis)), field("Treatment", inp("procedure", params.procedure)),
+    field("From", inp("dateFrom", params.dateFrom, { type: "date" })), field("To", inp("dateTo", params.dateTo, { type: "date" })),
+    field("Risk level", sel("riskLevel", ["", "LOW", "MEDIUM", "HIGH", "CRITICAL"], params.riskLevel)),
+    field("Investigation", sel("investigationStatus", ["", "NONE", "OPEN", "CLOSED"], params.investigationStatus)),
+    field("Claim status", sel("status", ["", "SUBMITTED", "UNDER_INVESTIGATION", "APPROVED", "REJECTED", "ESCALATED", "DOCUMENTS_REQUESTED", "SUSPICIOUS"], params.status)),
+    field("Page size", sel("size", ["20", "50", "100"], params.size || "50")),
+    inp("page", "1", { type: "hidden" }),
+    h("button", { type: "submit" }, "Search"), h("button", { type: "button", class: "sec", onclick: () => go("#/claims") }, "Reset"));
+  const page = Number(params.page || 1);
+  const rows = await api("GET", "/api/claims" + qs(Object.assign({}, params, { page })));
+  const size = Number(params.size || 50);
+  const pager = h("div", { class: "row", style: "margin-top:10px" },
+    h("button", { class: "sec", disabled: page <= 1, onclick: () => go("#/claims?" + qs(Object.assign({}, params, { page: page - 1 })).slice(1)) }, "Previous"),
+    h("span", { class: "muted" }, "Page " + page),
+    h("button", { class: "sec", disabled: rows.length < size, onclick: () => go("#/claims?" + qs(Object.assign({}, params, { page: page + 1 })).slice(1)) }, "Next"));
+  render(h("h2", {}, "All claims"), h("div", { class: "panel" }, form), table(rows, CLAIM_COLS, r => go("#/claim/" + encodeURIComponent(r.claimId))), pager);
+}
+async function pageHighRisk() {
+  const rows = await api("GET", "/api/claims/high-risk");
+  rows.sort((a, b) => (b.fraudAnalysis?.finalRiskScore || 0) - (a.fraudAnalysis?.finalRiskScore || 0));
+  render(h("h2", {}, "High-risk claims (HIGH / CRITICAL)"), table(rows, CLAIM_COLS, r => go("#/claim/" + encodeURIComponent(r.claimId))));
+}
+
+async function pageClaim(id) {
+  const c = await api("GET", "/api/claims/" + encodeURIComponent(id));
+  const a = c.fraudAnalysis;
+  const msg = h("div");
+  const invs = has("INVESTIGATOR", "ADMIN", "CLAIM_OFFICER") ? await api("GET", "/api/investigations?claimId=" + encodeURIComponent(id)) : [];
+  const actions = [];
+  if (has("CLAIM_OFFICER", "ADMIN")) {
+    const notes = inp("notes", "", { placeholder: "Notes (optional)" });
+    const doReview = (action) => guardAction(msg, async () => { await api("POST", "/api/claims/" + encodeURIComponent(id) + "/review", { action, notes: notes.value }); say("Claim " + action.toLowerCase() + "d"); pageClaim(id); });
+    actions.push(h("div", { class: "row" }, h("strong", {}, "Claim officer review:"), notes,
+      h("button", { class: "okb", onclick: () => doReview("APPROVE") }, "Approve"),
+      h("button", { class: "danger", onclick: () => doReview("REJECT") }, "Reject"),
+      h("button", { class: "sec", onclick: () => doReview("ESCALATE") }, "Escalate to investigators")));
+  }
+  if (has("INVESTIGATOR", "ADMIN")) {
+    const open = invs.find(i => i.status === "OPEN");
+    actions.push(h("div", { class: "row", style: "margin-top:8px" }, h("strong", {}, "Investigation:"),
+      open ? h("button", { onclick: () => go("#/investigation/" + open.investigationId) }, "Go to open investigation")
+        : h("button", { onclick: () => guardAction(msg, async () => { const inv = await api("POST", "/api/investigations", { claimId: id, notes: "Opened from claim details" }); go("#/investigation/" + inv.investigationId); }) }, "Open investigation")));
+  }
+  if (has("PROVIDER", "CLAIM_OFFICER", "ADMIN") && ["SUBMITTED", "DOCUMENTS_REQUESTED"].includes(c.claimStatus)) {
+    actions.push(h("div", { class: "row", style: "margin-top:8px" }, h("strong", {}, "Correction:"), h("button", { class: "sec", onclick: () => go("#/edit/" + encodeURIComponent(id)) }, "Correct claim information")));
+  }
+  const layers = a ? [["ML fraud probability", a.fraudProbability], ["Billing anomaly", a.billingAnomalyScore], ["Duplicate probability", a.duplicateScore], ["Provider risk", a.providerRiskScore], ["Patient risk", a.patientRiskScore]] : [];
+  render(back("All claims", "#/claims"),
+    h("h2", {}, "Claim " + c.claimId + " ", a ? level(a.riskLevel) : null, " ", status(c.claimStatus)), msg,
+    h("div", { class: "grid g2" },
+      h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Claim information"),
+        h("div", { class: "kv" },
+          "Patient", h("a", { href: "#/patient/" + encodeURIComponent(c.patientId) }, c.patientId),
+          "Provider", h("a", { href: "#/provider/" + encodeURIComponent(c.providerId) }, c.providerId),
+          "Hospital", c.hospitalId || "-", "Diagnosis", c.diagnosis || "-", "Treatment / procedure", c.procedure || "-",
+          "Admission", c.admissionDate || "-", "Discharge", c.dischargeDate || "-", "Claim date", c.claimDate || "-",
+          "Insurance amount", money(c.insuranceAmount), "Submitted", dt(c.createdAt)),
+        h("h3", {}, "Billing breakdown"),
+        bars([["Medicine", c.medicineCost], ["Room", c.roomCharges], ["Doctor", c.doctorCharges], ["Lab", c.labCharges], ["Other", c.otherCharges]], x => x[0], x => x[1], v => money(v)),
+        h("p", {}, h("strong", {}, "Total billed: " + money(c.totalBilledAmount)))),
+      h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Fraud risk score"),
+        a ? [h("div", { class: "score" }, String(a.finalRiskScore), h("span", { class: "muted", style: "font-size:18px" }, " / 100")),
+          h("p", { class: "muted small" }, "Model " + a.modelVersion + " \u00b7 analysed " + dt(a.createdAt)),
+          bars(layers, x => x[0], x => x[1], v => pct(v)),
+          h("h3", {}, "Why was this claim flagged?"),
+          a.riskFactors && a.riskFactors.length ? h("ul", { class: "factors" }, a.riskFactors.map(f => h("li", {}, f.description, h("span", { class: "muted small" }, " (contribution " + f.contribution + ")"))))
+            : h("p", { class: "muted" }, "No material risk factors.")]
+          : h("p", { class: "muted" }, "This claim has not been scored yet."))),
+    actions.length ? h("div", { class: "panel" }, actions) : null,
+    invs.length ? h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Investigations"),
+      table(invs, [["ID", r => r.investigationId], ["Status", r => status(r.status)], ["Decision", r => r.decision || "-"], ["Updated", r => dt(r.updatedAt)]], r => go("#/investigation/" + r.investigationId))) : null);
+}
+async function guardAction(box, fn) { try { await fn(); } catch (e) { box.replaceChildren(flash(e.message)); } }
+
+// ---------------------------------------------------------------- submit / edit
+const CLAIM_FIELDS = [["claimId", "Claim ID"], ["patientId", "Patient ID"], ["providerId", "Provider ID"], ["hospitalId", "Hospital ID"],
+  ["diagnosis", "Diagnosis"], ["procedure", "Treatment / procedure"], ["admissionDate", "Admission date", "date"], ["dischargeDate", "Discharge date", "date"],
+  ["claimDate", "Claim date", "date"], ["medicineCost", "Medicine cost", "number"], ["roomCharges", "Room charges", "number"], ["doctorCharges", "Doctor charges", "number"],
+  ["labCharges", "Lab charges", "number"], ["otherCharges", "Other charges", "number"], ["totalBilledAmount", "Total billed (auto)", "number"], ["insuranceAmount", "Insurance amount", "number"]];
+const COMPONENTS = ["medicineCost", "roomCharges", "doctorCharges", "labCharges", "otherCharges"];
+function claimForm(values, onSubmit, lockId) {
+  const form = h("form", { onsubmit: (e) => { e.preventDefault(); onSubmit(collect()); } },
+    h("div", { class: "grid g4" }, CLAIM_FIELDS.map(([n, l, t]) => field(l, inp(n, values[n], {
+      type: t || "text", step: t === "number" ? "0.01" : null, min: t === "number" ? "0" : null,
+      readonly: (n === "totalBilledAmount") || (lockId && n === "claimId") ? true : null,
+      required: ["claimId", "patientId", "providerId", "diagnosis", "admissionDate", "dischargeDate", "claimDate"].includes(n) ? true : null,
+      oninput: COMPONENTS.includes(n) ? recalc : null })))),
+    h("div", { class: "row", style: "margin-top:12px" }, h("button", { type: "submit" }, lockId ? "Save correction and re-score" : "Submit claim")));
+  function recalc() { const t = COMPONENTS.reduce((s, n) => s + (Number(form.elements[n].value) || 0), 0); form.elements.totalBilledAmount.value = Math.round(t * 100) / 100; }
+  function collect() { recalc(); const d = formData(form); for (const [n, , t] of CLAIM_FIELDS) if (t === "number" && d[n] !== "") d[n] = Number(d[n]); return d; }
+  form.fill = (v) => { for (const [n] of CLAIM_FIELDS) form.elements[n].value = v[n] ?? ""; recalc(); };
+  setTimeout(recalc);
+  return form;
+}
+function presets() {
+  const id = "CLM-" + new Date().toISOString().replace(/\D/g, "").slice(2, 14);
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    "Normal ECG": { claimId: id, patientId: "PAT-001", providerId: "PRV-001", hospitalId: "HOSP-A", diagnosis: "Chest pain", procedure: "ECG", admissionDate: today, dischargeDate: today, claimDate: today, medicineCost: 520, roomCharges: 900, doctorCharges: 950, labCharges: 300, otherCharges: 230, insuranceAmount: 2500 },
+    "Inflated knee surgery": { claimId: id, patientId: "PAT-005", providerId: "PRV-002", hospitalId: "HOSP-B", diagnosis: "Ligament tear", procedure: "Knee Surgery", admissionDate: today, dischargeDate: today, claimDate: today, medicineCost: 60000, roomCharges: 90000, doctorCharges: 50000, labCharges: 15000, otherCharges: 20000, insuranceAmount: 230000 },
+    "Long stay + room padding": { claimId: id, patientId: "PAT-009", providerId: "PRV-003", hospitalId: "HOSP-C", diagnosis: "Flu", procedure: "Consultation", admissionDate: "2025-03-01", dischargeDate: "2025-03-28", claimDate: "2025-03-29", medicineCost: 400, roomCharges: 14000, doctorCharges: 600, labCharges: 200, otherCharges: 300, insuranceAmount: 15000 },
+    "Invalid (discharge before admission)": { claimId: id, patientId: "PAT-002", providerId: "PRV-002", hospitalId: "HOSP-B", diagnosis: "Fracture", procedure: "X-Ray + Cast", admissionDate: "2025-05-10", dischargeDate: "2025-05-01", claimDate: "2025-05-12", medicineCost: 300, roomCharges: 600, doctorCharges: 500, labCharges: 250, otherCharges: 100, insuranceAmount: 1500 }
+  };
+}
+async function pageSubmit() {
+  const msg = h("div"), result = h("div");
+  const P = presets();
+  const form = claimForm(P["Normal ECG"], (data) => guardAction(msg, async () => {
+    msg.replaceChildren(); const c = await api("POST", "/api/claims", data);
+    say("Claim submitted"); result.replaceChildren(flash("Claim " + c.claimId + " submitted and scored: " + (c.fraudAnalysis ? c.fraudAnalysis.riskLevel + " (" + c.fraudAnalysis.finalRiskScore + ")" : "no analysis"), true),
+      h("button", { onclick: () => go("#/claim/" + encodeURIComponent(c.claimId)) }, "Open claim details"));
+  }));
+  render(h("h2", {}, "Submit claim"),
+    h("div", { class: "panel" }, h("div", { class: "row" }, h("strong", {}, "Test presets:"),
+      Object.keys(P).map(k => h("button", { type: "button", class: "sec", onclick: () => { form.fill(presets()[k]); result.replaceChildren(); msg.replaceChildren(); } }, k)),
+      h("button", { type: "button", class: "sec", onclick: () => guardAction(msg, async () => {
+        const all = await api("GET", "/api/claims?size=1"); if (!all.length) throw new Error("No claim to duplicate yet");
+        const src = await api("GET", "/api/claims/" + encodeURIComponent(all[0].claimId)); const copy = Object.assign({}, src); copy.claimId = presets()["Normal ECG"].claimId; form.fill(copy);
+      }) }, "Duplicate of latest claim")),
+      h("p", { class: "muted small" }, "Total billed is calculated from the five component charges (validation requires them to match).")),
+    msg, result, h("div", { class: "panel" }, form));
+}
+async function pageEdit(id) {
+  const c = await api("GET", "/api/claims/" + encodeURIComponent(id));
+  const msg = h("div");
+  const form = claimForm(c, (data) => guardAction(msg, async () => { await api("PUT", "/api/claims/" + encodeURIComponent(id), data); say("Claim corrected"); go("#/claim/" + encodeURIComponent(id)); }), true);
+  render(back("Claim " + id, "#/claim/" + encodeURIComponent(id)), h("h2", {}, "Correct claim " + id), msg, h("div", { class: "panel" }, form));
+}
+
+// ---------------------------------------------------------------- investigations
+async function pageInvestigations() {
+  const params = Object.fromEntries(new URLSearchParams(location.hash.split("?")[1] || ""));
+  const rows = await api("GET", "/api/investigations" + qs(params));
+  const form = h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); go("#/investigations?" + qs(formData(form)).slice(1)); } },
+    field("Status", sel("status", ["", "OPEN", "CLOSED"], params.status)), field("Claim ID", inp("claimId", params.claimId)),
+    field("Decision", sel("decision", ["", "APPROVE", "REJECT", "ESCALATE", "REQUEST_DOCUMENTS", "MARK_SUSPICIOUS", "FALSE_POSITIVE"], params.decision)),
+    h("button", { type: "submit" }, "Filter"));
+  render(h("h2", {}, "Investigations"), h("p", { class: "muted" }, "Open an investigation from a claim's details page."), h("div", { class: "panel" }, form),
+    table(rows, [["Investigation", r => r.investigationId], ["Claim", r => r.claimId], ["Investigator", r => r.investigatorId || "-"], ["Status", r => status(r.status)], ["Decision", r => r.decision || "-"], ["Opened", r => dt(r.createdAt)], ["Updated", r => dt(r.updatedAt)]],
+      r => go("#/investigation/" + r.investigationId)));
+}
+async function pageInvestigation(id) {
+  const inv = await api("GET", "/api/investigations/" + encodeURIComponent(id));
+  const claim = await api("GET", "/api/claims/" + encodeURIComponent(inv.claimId));
+  const msg = h("div");
+  const canAct = has("INVESTIGATOR", "ADMIN");
+  const decide = h("form", { onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => { await api("PATCH", "/api/investigations/" + encodeURIComponent(id), formData(decide)); say("Decision recorded"); pageInvestigation(id); }); } },
+    h("div", { class: "row" }, field("Decision", sel("decision", [["APPROVE", "Approve"], ["REJECT", "Reject"], ["ESCALATE", "Escalate"], ["REQUEST_DOCUMENTS", "Request documents"], ["MARK_SUSPICIOUS", "Mark as suspicious"], ["FALSE_POSITIVE", "False positive"]], inv.decision || "MARK_SUSPICIOUS"))),
+    field("Investigation notes", h("textarea", { name: "notes" }, inv.notes || "")),
+    h("div", { class: "row", style: "margin-top:8px" }, h("button", { type: "submit" }, "Record decision")));
+  const fileIn = h("input", { type: "file", accept: ".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain", required: true });
+  const desc = inp("description", "", { placeholder: "Description" });
+  const upload = h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => {
+    const f = fileIn.files[0]; if (!f) throw new Error("Choose a file");
+    if (f.size > 5 * 1024 * 1024) throw new Error("File is larger than 5 MB");
+    const b64 = await new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => fail(new Error("Could not read file")); r.readAsDataURL(f); });
+    let type = f.type || (f.name.endsWith(".txt") ? "text/plain" : "");
+    await api("POST", "/api/investigations/" + encodeURIComponent(id) + "/evidence", { fileName: f.name, contentType: type, dataBase64: b64, description: desc.value });
+    say("Evidence uploaded"); pageInvestigation(id);
+  }); } }, field("Evidence file (PDF, PNG, JPEG, TXT, max 5 MB)", fileIn), field("Description", desc), h("button", { type: "submit" }, "Upload"));
+  render(back("Investigations", "#/investigations"),
+    h("h2", {}, "Investigation " + inv.investigationId + " ", status(inv.status)), msg,
+    h("div", { class: "grid g2" },
+      h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Case"),
+        h("div", { class: "kv" }, "Claim", h("a", { href: "#/claim/" + encodeURIComponent(inv.claimId) }, inv.claimId),
+          "Claim status", status(claim.claimStatus), "Risk", claim.fraudAnalysis ? h("span", {}, level(claim.fraudAnalysis.riskLevel), " " + claim.fraudAnalysis.finalRiskScore) : "-",
+          "Patient", claim.patientId, "Provider", claim.providerId, "Procedure", claim.procedure || "-", "Amount", money(claim.totalBilledAmount),
+          "Investigator", inv.investigatorId || "-", "Decision", inv.decision || "-", "Opened", dt(inv.createdAt), "Updated", dt(inv.updatedAt)),
+        claim.fraudAnalysis && claim.fraudAnalysis.riskFactors.length ? [h("h3", {}, "Risk factors"), h("ul", { class: "factors" }, claim.fraudAnalysis.riskFactors.map(f => h("li", {}, f.description)))] : null),
+      h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Decision"), canAct ? decide : h("p", { class: "muted" }, "Only investigators and admins can record decisions."))),
+    h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Evidence"),
+      canAct ? upload : null,
+      table(inv.evidence || [], [["File", r => r.fileName], ["Type", r => r.contentType], ["Size", r => Math.ceil(r.sizeBytes / 1024) + " KB"], ["Description", r => r.description || "-"], ["Uploaded", r => dt(r.uploadedAt)],
+        ["", r => canAct ? h("button", { class: "sec", onclick: () => download(r) }, "Download") : ""]])));
+}
+async function download(ev) {
+  const res = await fetch("/api/evidence/" + encodeURIComponent(ev.evidenceId) + "/download", { headers: { Authorization: "Bearer " + S.token } });
+  if (!res.ok) { alert("Download failed: HTTP " + res.status); return; }
+  const url = URL.createObjectURL(await res.blob());
+  const a = h("a", { href: url, download: ev.fileName }); document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ---------------------------------------------------------------- notifications
+async function pageNotifications() {
+  const onlyUnread = location.hash.includes("unread=true");
+  const rows = await api("GET", "/api/notifications" + (onlyUnread ? "?unread=true" : ""));
+  render(h("h2", {}, "Notifications"),
+    h("div", { class: "row", style: "margin-bottom:12px" },
+      h("button", { class: onlyUnread ? "sec" : null, onclick: () => go("#/notifications") }, "All"),
+      h("button", { class: onlyUnread ? null : "sec", onclick: () => go("#/notifications?unread=true") }, "Unread only")),
+    table(rows, [["", r => r.read ? "" : h("span", { class: "pill" }, "new")], ["Severity", r => level(r.severity)], ["Type", r => r.type], ["Message", r => r.message],
+      ["Claim", r => r.claimId ? h("a", { href: "#/claim/" + encodeURIComponent(r.claimId) }, r.claimId) : "-"], ["When", r => dt(r.createdAt)],
+      ["", r => r.read ? h("span", { class: "muted small" }, "read") : h("button", { class: "sec", onclick: async () => { await api("POST", "/api/notifications/" + encodeURIComponent(r.id) + "/read"); await refreshUnread(); pageNotifications(); } }, "Mark read")]]));
+  refreshUnread();
+}
+
+// ---------------------------------------------------------------- ML model
+async function pageModel() {
+  const m = await api("GET", "/api/ml/model");
+  const msg = h("div");
+  const x = m.metrics || {}, cm = x.confusionMatrix || {};
+  const rescore = h("input", { type: "checkbox", id: "rescore", checked: true });
+  render(h("h2", {}, "ML model monitoring"), msg,
+    h("div", { class: "grid g4" }, [["Active model", m.active], ["Recall", pct(x.recall)], ["Precision", pct(x.precision)], ["F1 score", pct(x.f1)], ["ROC-AUC", x.rocAuc], ["Accuracy", pct(x.accuracy)], ["False-positive rate", pct(x.falsePositiveRate)], ["Feedback labels", m.feedbackSamples + " used / " + m.pendingFeedbackSamples + " available"]]
+      .map(([l, v]) => h("div", { class: "kpi" }, h("div", { class: "l" }, l), h("div", { class: "v", style: "font-size:20px" }, v ?? "-")))),
+    h("div", { class: "grid g2", style: "margin-top:16px" },
+      h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Confusion matrix (hold-out set, n=" + m.testSize + ")"),
+        h("table", { class: "cm" }, h("tr", {}, h("th", {}, ""), h("th", { scope: "col" }, "Predicted legit"), h("th", { scope: "col" }, "Predicted fraud")),
+          h("tr", {}, h("th", { scope: "row" }, "Actual legit"), h("td", {}, cm.trueNegative), h("td", {}, cm.falsePositive)),
+          h("tr", {}, h("th", { scope: "row" }, "Actual fraud"), h("td", {}, cm.falseNegative), h("td", {}, cm.truePositive))),
+        h("p", { class: "muted small" }, m.algorithm + ". Trained " + dt(m.trainedAt) + " on " + m.trainSize + " samples. Anomaly layer: " + (m.anomalyModel ? m.anomalyModel.algorithm + " (" + m.anomalyModel.trees + " trees, " + m.anomalyModel.trainedOn + " points)" : "-") + ".")),
+      h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Learned feature weights"),
+        bars(Object.entries(m.weights || {}), e => e[0], e => Math.abs(e[1]), (v, e) => e[1].toFixed(3)),
+        h("p", { class: "muted small" }, "Bias " + m.bias + ". Positive weights push towards fraud."))),
+    has("ADMIN") ? h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Retrain with investigator feedback"),
+      h("p", { class: "muted" }, "Final investigation decisions become labels: Reject / Mark suspicious = fraud, Approve / False positive = legitimate."),
+      h("div", { class: "row" }, h("label", { style: "flex-direction:row;align-items:center;gap:6px", for: "rescore" }, rescore, "Re-score all claims afterwards"),
+        h("button", { onclick: () => guardAction(msg, async () => { const r = await api("POST", "/api/ml/retrain", { rescore: rescore.checked }); say("Model retrained"); await pageModel(); $main.prepend(flash("Trained " + r.version + " with " + r.feedbackSamples + " feedback label(s); re-scored " + r.rescoredClaims + " claim(s).", true)); }) }, "Retrain now"))) : null,
+    h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Training history"),
+      table(m.history || [], [["Version", r => r.version], ["Trained", r => dt(r.trainedAt)], ["Feedback", r => r.feedbackSamples], ["Recall", r => pct(r.metrics.recall)], ["Precision", r => pct(r.metrics.precision)], ["F1", r => pct(r.metrics.f1)], ["ROC-AUC", r => r.metrics.rocAuc]])));
+}
+
+// ---------------------------------------------------------------- patients
+async function pagePatients() {
+  const q = new URLSearchParams(location.hash.split("?")[1] || "").get("q") || "";
+  const rows = await api("GET", "/api/patients" + qs({ q }));
+  const msg = h("div");
+  const search = h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); go("#/patients" + qs(formData(search))); } }, field("Search by ID or name", inp("q", q)), h("button", { type: "submit" }, "Search"));
+  const create = has("ADMIN", "CLAIM_OFFICER") ? h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => { const d = formData(create); d.age = Number(d.age); await api("POST", "/api/patients", d); say("Patient created"); pagePatients(); }); } },
+    field("Patient ID", inp("patientId", "", { required: true })), field("Name", inp("name", "", { required: true })), field("Age", inp("age", "", { type: "number", min: "0", max: "130", required: true })),
+    field("Gender", sel("gender", ["F", "M", "X"])), field("Location", inp("location")), field("Insurance ID", inp("insuranceId")), h("button", { type: "submit" }, "Add patient")) : null;
+  render(h("h2", {}, "Patients"), rows.length && rows[0].masked ? h("p", { class: "muted" }, "Names and insurance IDs are masked for your role.") : null, msg,
+    h("div", { class: "panel" }, search), create ? h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Register patient"), create) : null,
+    table(rows, [["Patient", r => r.patientId], ["Name", r => r.name], ["Age", r => r.age], ["Gender", r => r.gender || "-"], ["Location", r => r.location || "-"], ["Insurance", r => r.insuranceId || "-"], ["Claims", r => r.claimCount], ["Total billed", r => money(r.totalBilled)]],
+      r => go("#/patient/" + encodeURIComponent(r.patientId))));
+}
+async function pagePatient(id) {
+  const p = await api("GET", "/api/patients/" + encodeURIComponent(id));
+  const b = p.behavior;
+  render(back("Patients", "#/patients"), h("h2", {}, "Patient " + p.patientId),
+    h("div", { class: "grid g2" },
+      h("div", { class: "panel" }, h("div", { class: "kv" }, "Name", p.name, "Age", p.age, "Gender", p.gender || "-", "Location", p.location || "-", "Insurance ID", p.insuranceId || "-", "Claims", p.claimCount, "Total billed", money(p.totalBilled)),
+        p.masked ? h("p", { class: "muted small" }, "Sensitive fields are masked for your role.") : null),
+      h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Behavior analysis"),
+        b ? h("div", { class: "kv" }, "Patient risk score", pct(b.riskScore), "Claims in window", b.claimsInWindow, "Repeated treatments", b.repeatedTreatments, "Most hospitals for one treatment", b.maxHospitalsForOneTreatment) : h("p", { class: "muted" }, "No claims yet."))),
+    h("h3", {}, "Claim history"),
+    table(p.claims, [["Claim", r => r.claimId], ["Date", r => r.claimDate], ["Provider", r => r.providerId], ["Hospital", r => r.hospitalId], ["Procedure", r => r.procedure], ["Amount", r => money(r.totalBilledAmount)], ["Risk", r => level(r.riskLevel)], ["Status", r => status(r.claimStatus)]],
+      r => go("#/claim/" + encodeURIComponent(r.claimId))));
+}
+
+// ---------------------------------------------------------------- providers
+const PROVIDER_FIELDS = [["providerId", "Provider ID"], ["providerName", "Name"], ["hospital", "Hospital"], ["location", "Location"], ["specialization", "Specialization"]];
+async function pageProviders() {
+  const rows = await api("GET", "/api/providers");
+  rows.sort((a, b) => Number(b.riskScore) - Number(a.riskScore));
+  const msg = h("div");
+  const create = has("ADMIN") ? h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => { await api("POST", "/api/providers", formData(create)); say("Provider created"); pageProviders(); }); } },
+    PROVIDER_FIELDS.map(([n, l]) => field(l, inp(n, "", { required: n === "providerId" || n === "providerName" ? true : null }))), h("button", { type: "submit" }, "Add provider")) : null;
+  render(h("h2", {}, "Providers"), msg, create ? h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Register provider"), create) : null,
+    table(rows, [["Provider", r => r.providerId], ["Name", r => r.providerName], ["Hospital", r => r.hospital || "-"], ["Location", r => r.location || "-"], ["Specialization", r => r.specialization || "-"], ["Claims", r => r.claimCount], ["Avg claim", r => money(r.averageClaim)], ["Flagged rate", r => pct(r.flaggedRate)], ["Risk score", r => Number(r.riskScore).toFixed(3)]],
+      r => go("#/provider/" + encodeURIComponent(r.providerId))));
+}
+async function pageProvider(id) {
+  const p = await api("GET", "/api/providers/" + encodeURIComponent(id));
+  const report = has("ADMIN", "CLAIM_OFFICER") ? await api("GET", "/api/reports/provider/" + encodeURIComponent(id)) : null;
+  const claims = await api("GET", "/api/claims?providerId=" + encodeURIComponent(id) + "&size=100");
+  const msg = h("div");
+  const edit = has("ADMIN") ? h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => { await api("PUT", "/api/providers/" + encodeURIComponent(id), formData(edit)); say("Provider saved"); pageProvider(id); }); } },
+    PROVIDER_FIELDS.slice(1).map(([n, l]) => field(l, inp(n, p[n]))), h("button", { type: "submit" }, "Save")) : null;
+  render(back("Providers", "#/providers"), h("h2", {}, p.providerName + " (" + p.providerId + ")"), msg,
+    h("div", { class: "grid g2" },
+      h("div", { class: "panel" }, h("div", { class: "kv" }, "Hospital", p.hospital || "-", "Location", p.location || "-", "Specialization", p.specialization || "-", "Claims", p.claimCount, "Average claim", money(p.averageClaim), "Flagged rate", pct(p.flaggedRate), "Risk score", Number(p.riskScore).toFixed(3))),
+      report ? h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Provider report"), kvObject(report)) : null),
+    edit ? h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Edit provider"), edit) : null,
+    h("h3", {}, "Claims"), table(claims, CLAIM_COLS, r => go("#/claim/" + encodeURIComponent(r.claimId))));
+}
+function kvObject(o) {
+  return h("div", { class: "kv" }, Object.entries(o).flatMap(([k, v]) => [k, v !== null && typeof v === "object" ? h("pre", { style: "margin:0;max-height:200px" }, JSON.stringify(v, null, 2)) : (v ?? "-")]));
+}
+
+// ---------------------------------------------------------------- reports
+async function pageReports() {
+  const out = h("div"), msg = h("div");
+  const fa = await api("GET", "/api/reports/fraud-analytics");
+  const claimForm = h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => { msg.replaceChildren(); const r = await api("GET", "/api/reports/claim/" + encodeURIComponent(formData(claimForm).id)); out.replaceChildren(reportPanel("Claim report", r)); }); } },
+    field("Claim ID", inp("id", "", { required: true })), h("button", { type: "submit" }, "Claim report"));
+  const provForm = h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => { msg.replaceChildren(); const r = await api("GET", "/api/reports/provider/" + encodeURIComponent(formData(provForm).id)); out.replaceChildren(reportPanel("Provider report", r)); }); } },
+    field("Provider ID", inp("id", "PRV-001", { required: true })), h("button", { type: "submit" }, "Provider report"));
+  render(h("h2", {}, "Reports"),
+    h("div", { class: "grid g4" }, [["Total claims", fa.totalClaims], ["Suspicious claims", fa.suspiciousClaims], ["Fraud rate", pct(fa.fraudRate)], ["Potential billing inflation", money(fa.potentialBillingInflation)]]
+      .map(([l, v]) => h("div", { class: "kpi" }, h("div", { class: "l" }, l), h("div", { class: "v" }, v ?? "-")))),
+    h("div", { class: "grid g2", style: "margin-top:16px" },
+      chart("Top risk providers (fraud rate)", fa.topRiskProviders, i => i.providerId, i => i.fraudRate, (v, i) => pct(v) + " (" + i.flaggedClaims + "/" + i.totalClaims + ")"),
+      chart("Top risk treatments (flagged)", fa.topRiskTreatments, i => i.treatment, i => i.flaggedClaims, (v, i) => v + " / " + i.totalClaims),
+      chart("Monthly trend (flagged)", fa.monthlyTrends, i => i.period, i => i.flagged, (v, i) => v + " / " + i.total)),
+    h("div", { class: "panel" }, h("div", { class: "row" }, claimForm, provForm,
+      h("button", { class: "sec", onclick: () => downloadJson("fraud-analytics-report.json", fa) }, "Download fraud analytics (JSON)"))),
+    msg, out);
+}
+function reportPanel(title, r) {
+  return h("div", { class: "panel" }, h("div", { class: "row" }, h("h3", { style: "margin:0" }, title), h("button", { class: "sec", onclick: () => downloadJson(title.toLowerCase().replace(/\s+/g, "-") + ".json", r) }, "Download JSON"), h("button", { class: "sec", onclick: () => window.print() }, "Print")), kvObject(r));
+}
+function downloadJson(name, obj) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }));
+  const a = h("a", { href: url, download: name }); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ---------------------------------------------------------------- audit
+async function pageAudit() {
+  const rows = await api("GET", "/api/audit");
+  const filter = new URLSearchParams(location.hash.split("?")[1] || "").get("action") || "";
+  const actions = [...new Set(rows.map(r => r.action))].sort();
+  const shown = filter ? rows.filter(r => r.action === filter) : rows;
+  render(h("h2", {}, "Audit log"),
+    h("div", { class: "panel row" }, field("Action", h("select", { onchange: (e) => go("#/audit" + qs({ action: e.target.value })) }, [h("option", { value: "" }, "All")].concat(actions.map(a => h("option", { value: a, selected: a === filter }, a))))),
+      h("span", { class: "muted" }, shown.length + " entr" + (shown.length === 1 ? "y" : "ies"))),
+    table(shown, [["When", r => dt(r.timestamp)], ["User", r => r.userId || "-"], ["Action", r => r.action], ["Target", r => r.targetId || "-"], ["IP", r => r.ip || "-"]]));
+}
+
+// ---------------------------------------------------------------- users / profile
+async function pageUsers() {
+  const rows = await api("GET", "/api/users");
+  const msg = h("div");
+  const roles = ["ADMIN", "CLAIM_OFFICER", "INVESTIGATOR", "PROVIDER"];
+  const create = h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => { await api("POST", "/api/users", formData(create)); say("User created"); pageUsers(); }); } },
+    field("Name", inp("name", "", { required: true })), field("Email", inp("email", "", { type: "email", required: true })),
+    field("Password (min 8)", inp("password", "", { type: "password", minlength: "8", required: true, autocomplete: "new-password" })), field("Role", sel("role", roles, "CLAIM_OFFICER")), h("button", { type: "submit" }, "Create user"));
+  const editRow = (u) => {
+    const f = h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => { const d = formData(f); if (!d.password) delete d.password; await api("PATCH", "/api/users/" + encodeURIComponent(u.id), d); say("User updated"); pageUsers(); }); } },
+      sel("role", roles, u.role), sel("status", ["ACTIVE", "DISABLED"], u.status), inp("password", "", { type: "password", placeholder: "New password (optional)", autocomplete: "new-password" }), h("button", { type: "submit", class: "sec" }, "Save"));
+    return f;
+  };
+  render(h("h2", {}, "User management"), msg, h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Create user"), create),
+    table(rows, [["Name", r => r.name], ["Email", r => r.email], ["Created", r => dt(r.createdAt)], ["Role / status / password", r => r.id === S.userId ? h("span", {}, status(r.role), " ", status(r.status), h("span", { class: "muted small" }, " (you)")) : editRow(r)]]));
+}
+async function pageProfile() {
+  const me = await api("GET", "/api/me");
+  const msg = h("div");
+  const pw = h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); guardAction(msg, async () => { await api("POST", "/api/me/password", formData(pw)); pw.reset(); msg.replaceChildren(flash("Password changed.", true)); }); } },
+    field("Current password", inp("currentPassword", "", { type: "password", required: true, autocomplete: "current-password" })),
+    field("New password (min 8)", inp("newPassword", "", { type: "password", required: true, minlength: "8", autocomplete: "new-password" })), h("button", { type: "submit" }, "Change password"));
+  render(h("h2", {}, "Profile"), msg, h("div", { class: "panel" }, h("div", { class: "kv" }, "Name", me.name, "Email", me.email, "Role", me.role, "Status", me.status, "User ID", me.id, "Member since", dt(me.createdAt))),
+    h("div", { class: "panel" }, h("h3", { style: "margin-top:0" }, "Change password"), pw));
+}
+
+// ---------------------------------------------------------------- API console
+async function pageConsole() {
+  const out = h("pre", {}, "Response appears here.");
+  const examples = [["GET", "/api/health"], ["GET", "/api/dashboard"], ["GET", "/api/claims?riskLevel=HIGH&page=1&size=5"], ["GET", "/api/claims/high-risk"], ["GET", "/api/investigations?status=OPEN"],
+    ["GET", "/api/notifications?unread=true"], ["GET", "/api/patients"], ["GET", "/api/providers"], ["GET", "/api/reports/fraud-analytics"], ["GET", "/api/ml/model"], ["GET", "/api/audit"], ["GET", "/api/users"], ["GET", "/api/me"]];
+  const form = h("form", { onsubmit: async (e) => { e.preventDefault(); const d = formData(form); const t0 = performance.now();
+    try { const opts = { method: d.method, headers: { Authorization: "Bearer " + S.token } }; if (d.body && d.method !== "GET") { opts.headers["Content-Type"] = "application/json"; opts.body = d.body; }
+      const res = await fetch(d.path, opts); const text = await res.text(); let pretty = text; try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (x) { /* raw */ }
+      out.textContent = "HTTP " + res.status + "  (" + Math.round(performance.now() - t0) + " ms)\n\n" + pretty;
+    } catch (err) { out.textContent = "Request failed: " + err.message; } } },
+    h("div", { class: "row" }, field("Method", sel("method", ["GET", "POST", "PUT", "PATCH", "DELETE"], "GET")), h("label", { style: "flex:1" }, "Path", inp("path", "/api/dashboard", { style: "width:100%" })), h("button", { type: "submit" }, "Send")),
+    field("JSON body (for POST / PUT / PATCH)", h("textarea", { name: "body", rows: "6" })));
+  render(h("h2", {}, "API console"), h("p", { class: "muted" }, "Sends requests with your current token, so you can test any endpoint and role restriction directly."),
+    h("div", { class: "panel" }, form, h("div", { class: "row", style: "margin-top:10px" }, examples.map(([m, p]) => h("button", { type: "button", class: "sec", onclick: () => { form.elements.method.value = m; form.elements.path.value = p; } }, m + " " + p)))), out);
+}
+
+route();
+refreshUnread();
+setInterval(refreshUnread, 30000);
+</script>
+</body>
+</html>

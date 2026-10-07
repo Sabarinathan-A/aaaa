@@ -5,3 +5,7 @@ out-test/
 .idea/
 *.iml
 target/
+out-new/
+# Runtime data: snapshot, evidence files, email outbox, keystores
+data/
+*.p12

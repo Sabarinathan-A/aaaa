@@ -23,6 +23,14 @@ public final class AuditService {
     public static final String ACTION_CLAIM_VIEW = "CLAIM_VIEW";
     public static final String ACTION_INVESTIGATION_DECISION = "INVESTIGATION_DECISION";
     public static final String ACTION_USER_CREATE = "USER_CREATE";
+    public static final String ACTION_USER_UPDATE = "USER_UPDATE";
+    public static final String ACTION_CLAIM_MODIFY = "CLAIM_MODIFY";
+    public static final String ACTION_CLAIM_REVIEW = "CLAIM_REVIEW";
+    public static final String ACTION_INVESTIGATION_OPEN = "INVESTIGATION_OPEN";
+    public static final String ACTION_EVIDENCE_UPLOAD = "EVIDENCE_UPLOAD";
+    public static final String ACTION_PATIENT_VIEW = "PATIENT_VIEW";
+    public static final String ACTION_MODEL_UPDATE = "MODEL_UPDATE";
+    public static final String ACTION_PROVIDER_UPDATE = "PROVIDER_UPDATE";
 
     private final AuditLogRepository repository;
 

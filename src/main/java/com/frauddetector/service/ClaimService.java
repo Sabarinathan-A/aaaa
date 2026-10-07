@@ -26,6 +26,16 @@ import java.util.Map;
 public final class ClaimService {
 
     public static final String STATUS_SUBMITTED = "SUBMITTED";
+    public static final String STATUS_UNDER_INVESTIGATION = "UNDER_INVESTIGATION";
+    public static final String STATUS_APPROVED = "APPROVED";
+    public static final String STATUS_REJECTED = "REJECTED";
+    public static final String STATUS_ESCALATED = "ESCALATED";
+    public static final String STATUS_DOCUMENTS_REQUESTED = "DOCUMENTS_REQUESTED";
+    public static final String STATUS_SUSPICIOUS = "SUSPICIOUS";
+
+    /** Statuses in which the submitter may still correct the claim (PRD 5.4). */
+    private static final java.util.Set<String> CORRECTABLE =
+            java.util.Set.of(STATUS_SUBMITTED, STATUS_DOCUMENTS_REQUESTED);
 
     private final ClaimRepository claims;
     private final ValidationService validation;
@@ -79,6 +89,91 @@ public final class ClaimService {
             notificationService.onClaimScored(claim, analysis);
         }
         return ClaimResponse.of(claim, analysis);
+    }
+
+    /**
+     * Correct an existing claim (PRD 5.4 "Correcting claim information").
+     * Only allowed while the claim is SUBMITTED or DOCUMENTS_REQUESTED. The
+     * corrected claim is re-validated, re-scored, and returns to SUBMITTED.
+     */
+    public ClaimResponse correctClaim(String claimId, SubmitClaimRequest req) {
+        Claim existing = claims.findById(claimId)
+                .orElseThrow(() -> new ApiException(404, "Claim '" + claimId + "' not found"));
+        if (!CORRECTABLE.contains(existing.getClaimStatus())) {
+            throw new ApiException(409, "Claim '" + claimId + "' is " + existing.getClaimStatus()
+                    + " and can no longer be corrected (allowed: " + CORRECTABLE + ")");
+        }
+        if (req.claimId != null && !req.claimId.isBlank() && !req.claimId.equals(claimId)) {
+            throw new ApiException(400, "claimId in body does not match the URL");
+        }
+        SubmitClaimRequest fixed = new SubmitClaimRequest(claimId, req.patientId, req.providerId,
+                req.hospitalId, req.diagnosis, req.procedure, req.admissionDate, req.dischargeDate,
+                req.claimDate, req.medicineCost, req.roomCharges, req.doctorCharges, req.labCharges,
+                req.otherCharges, req.totalBilledAmount, req.insuranceAmount);
+        validation.validate(fixed, true);
+        Claim corrected = new Claim(
+                claimId, fixed.patientId, fixed.providerId, fixed.hospitalId,
+                fixed.diagnosis, fixed.procedure, fixed.admissionDate, fixed.dischargeDate, fixed.claimDate,
+                fixed.medicineCost, fixed.roomCharges, fixed.doctorCharges, fixed.labCharges,
+                fixed.otherCharges, fixed.totalBilledAmount, fixed.insuranceAmount,
+                STATUS_SUBMITTED, existing.getCreatedAt());
+        claims.save(corrected);
+        FraudAnalysis analysis = fraudRiskService.analyze(corrected);
+        analyses.findByClaimId(claimId).ifPresent(old -> analyses.deleteById(old.getAnalysisId()));
+        analyses.save(analysis);
+        if (notificationService != null) {
+            notificationService.onClaimScored(corrected, analysis);
+        }
+        return ClaimResponse.of(corrected, analysis);
+    }
+
+    /**
+     * Claim-officer review (PRD 5.2): APPROVE a normal claim, REJECT it, or
+     * ESCALATE it to the investigators (which raises an investigator notification).
+     */
+    public ClaimResponse review(String claimId, String action, String notes) {
+        Claim existing = claims.findById(claimId)
+                .orElseThrow(() -> new ApiException(404, "Claim '" + claimId + "' not found"));
+        String a = action == null ? "" : action.trim().toUpperCase();
+        String status;
+        switch (a) {
+            case "APPROVE":
+                status = STATUS_APPROVED;
+                break;
+            case "REJECT":
+                status = STATUS_REJECTED;
+                break;
+            case "ESCALATE":
+                status = STATUS_ESCALATED;
+                break;
+            default:
+                throw new ApiException(400, "Invalid action '" + action + "'. Allowed: APPROVE, REJECT, ESCALATE");
+        }
+        Claim updated = existing.withStatus(status);
+        claims.save(updated);
+        FraudAnalysis analysis = analyses.findByClaimId(claimId).orElse(null);
+        if (STATUS_ESCALATED.equals(status) && notificationService != null) {
+            String msg = "Claim " + claimId + " was escalated by a claim officer"
+                    + (notes == null || notes.isBlank() ? "." : ": " + notes);
+            notificationService.notify(com.frauddetector.security.Role.INVESTIGATOR, "CLAIM_ESCALATED",
+                    msg, claimId, analysis == null ? "MEDIUM" : analysis.getRiskLevel());
+        }
+        return ClaimResponse.of(updated, analysis);
+    }
+
+    /**
+     * Re-run the fraud engine over every claim (oldest first) and replace the
+     * stored analyses, e.g. after the model is retrained. Returns the count.
+     */
+    public int rescoreAll() {
+        List<Claim> all = claims.findAll();
+        all.sort(Comparator.comparing(Claim::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        for (Claim c : all) {
+            FraudAnalysis fresh = fraudRiskService.analyze(c);
+            analyses.findByClaimId(c.getClaimId()).ifPresent(old -> analyses.deleteById(old.getAnalysisId()));
+            analyses.save(fresh);
+        }
+        return all.size();
     }
 
     /** Fetch a claim by id (with its latest analysis, if any) or raise 404. */
@@ -146,6 +241,9 @@ public final class ClaimService {
             return false;
         }
         if (!eq(f.get("hospital"), c.getHospitalId())) {
+            return false;
+        }
+        if (!isBlank(f.get("status")) && !f.get("status").trim().equalsIgnoreCase(c.getClaimStatus())) {
             return false;
         }
         if (!contains(f.get("diagnosis"), c.getDiagnosis())) {

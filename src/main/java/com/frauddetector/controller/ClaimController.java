@@ -37,7 +37,38 @@ public final class ClaimController {
     public void register(Router router) {
         router.post("/api/claims", this::submit);
         router.get("/api/claims/{id}", this::getOne);
+        router.put("/api/claims/{id}", this::correct);
+        router.post("/api/claims/{id}/review", this::review);
         router.get("/api/claims", this::list);
+    }
+
+    /** PUT /api/claims/{id} - correct a claim still in SUBMITTED / DOCUMENTS_REQUESTED. */
+    private Object correct(HttpContext ctx) {
+        Principal principal = authFilter.requireRole(ctx, Role.PROVIDER, Role.CLAIM_OFFICER, Role.ADMIN);
+        SubmitClaimRequest req = SubmitClaimRequest.fromJson(ctx.body());
+        ClaimResponse res = claimService.correctClaim(ctx.pathParam("id"), req);
+        if (auditService != null) {
+            auditService.record(principal.userId(), AuditService.ACTION_CLAIM_MODIFY,
+                    ctx.pathParam("id"), ctx.remoteAddress());
+        }
+        ctx.respond(200, res.toJson());
+        return null;
+    }
+
+    /** POST /api/claims/{id}/review - claim officer APPROVE / REJECT / ESCALATE. */
+    private Object review(HttpContext ctx) {
+        Principal principal = authFilter.requireRole(ctx, Role.CLAIM_OFFICER, Role.ADMIN);
+        Map<String, Object> body = ctx.body();
+        Object action = body.get("action");
+        Object notes = body.get("notes");
+        ClaimResponse res = claimService.review(ctx.pathParam("id"),
+                action == null ? null : action.toString(), notes == null ? null : notes.toString());
+        if (auditService != null) {
+            auditService.record(principal.userId(), AuditService.ACTION_CLAIM_REVIEW,
+                    ctx.pathParam("id"), ctx.remoteAddress());
+        }
+        ctx.respond(200, res.toJson());
+        return null;
     }
 
     private Object submit(HttpContext ctx) {

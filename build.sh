@@ -26,6 +26,13 @@ MAIN_CLASS=com.frauddetector.App
 SRC_MAIN=src/main/java
 SRC_TEST=src/test/java
 
+# Copy non-Java resources (the web UI) onto the classpath.
+copy_resources() {
+    if [ -d src/main/resources ]; then
+        cp -R src/main/resources/. "$1"/
+    fi
+}
+
 clean() {
     echo ">> clean: removing $OUT and $OUT_TEST"
     rm -rf "$OUT" "$OUT_TEST"
@@ -40,7 +47,8 @@ build() {
         echo "!! no sources found under $SRC_MAIN" >&2
         exit 1
     fi
-    javac -d "$OUT" $SOURCES
+    javac -encoding UTF-8 -d "$OUT" $SOURCES
+    copy_resources "$OUT"
     echo ">> build: packaging $OUT/app.jar (main-class $MAIN_CLASS)"
     jar --create --file "$OUT/app.jar" --main-class "$MAIN_CLASS" -C "$OUT" .
     echo ">> build: done -> $OUT/app.jar"
@@ -55,7 +63,8 @@ test() {
         echo "!! no sources found under $SRC_MAIN / $SRC_TEST" >&2
         exit 1
     fi
-    javac -d "$OUT_TEST" $SOURCES
+    javac -encoding UTF-8 -d "$OUT_TEST" $SOURCES
+    copy_resources "$OUT_TEST"
 
     echo ">> test: discovering *Test classes"
     PASS=0
