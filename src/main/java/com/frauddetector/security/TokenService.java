@@ -63,13 +63,12 @@ public final class TokenService {
             throw new InvalidTokenException("malformed token");
         }
         String signingInput = parts[0] + "." + parts[1];
-        byte[] expectedSig = sign(signingInput);
-        byte[] actualSig;
-        try {
-            actualSig = URL_DECODER.decode(parts[2]);
-        } catch (IllegalArgumentException e) {
-            throw new InvalidTokenException("bad signature encoding");
-        }
+        // Compare the canonical base64url encoding, not the decoded bytes: the
+        // decoder ignores the unused low bits of the final character, so
+        // byte comparison would accept several spellings of one signature
+        // (token malleability).
+        byte[] expectedSig = URL_ENCODER.encodeToString(sign(signingInput)).getBytes(StandardCharsets.US_ASCII);
+        byte[] actualSig = parts[2].getBytes(StandardCharsets.US_ASCII);
         if (!constantTimeEquals(expectedSig, actualSig)) {
             throw new InvalidTokenException("signature mismatch");
         }

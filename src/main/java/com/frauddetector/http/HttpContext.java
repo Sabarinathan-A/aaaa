@@ -158,6 +158,28 @@ public final class HttpContext {
         }
     }
 
+    /** Send a non-JSON payload (e.g. the static web UI) with an explicit content type. */
+    public void respondRaw(int status, String contentType, byte[] payload) {
+        if (responded) {
+            return;
+        }
+        responded = true;
+        try {
+            exchange.getResponseHeaders().set("Content-Type", contentType);
+            exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+            exchange.sendResponseHeaders(status, payload.length == 0 ? -1 : payload.length);
+            if (payload.length > 0) {
+                try (OutputStream out = exchange.getResponseBody()) {
+                    out.write(payload);
+                }
+            }
+        } catch (IOException e) {
+            // Connection likely closed; nothing further we can do.
+        } finally {
+            exchange.close();
+        }
+    }
+
     boolean hasResponded() {
         return responded;
     }

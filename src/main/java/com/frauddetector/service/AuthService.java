@@ -41,6 +41,9 @@ public final class AuthService {
         if (!hasher.verify(password, user.getSalt(), user.getPasswordHash())) {
             throw new ApiException(401, "Invalid credentials");
         }
+        if ("DISABLED".equals(user.getStatus())) {
+            throw new ApiException(403, "This account is disabled");
+        }
         String token = tokens.issue(user.getId(), user.getRole());
         return new LoginResponse(token, user.getRole().name(), user.getName());
     }

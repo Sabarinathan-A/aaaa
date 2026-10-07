@@ -46,8 +46,16 @@ public final class ValidationService {
 
     /** Throws {@link ApiException} (409 for duplicate id, else 400) if invalid. */
     public void validate(SubmitClaimRequest req) {
+        validate(req, false);
+    }
+
+    /**
+     * Validate a new submission ({@code isUpdate=false}) or a correction of an
+     * existing claim ({@code isUpdate=true}, which skips the duplicate-id rule).
+     */
+    public void validate(SubmitClaimRequest req, boolean isUpdate) {
         // Duplicate claimId -> 409, checked first and independently.
-        if (isPresent(req.claimId) && claims.existsById(req.claimId)) {
+        if (!isUpdate && isPresent(req.claimId) && claims.existsById(req.claimId)) {
             throw new ApiException(409, "A claim with claimId '" + req.claimId + "' already exists");
         }
 

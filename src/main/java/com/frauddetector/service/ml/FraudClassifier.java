@@ -81,6 +81,40 @@ public final class FraudClassifier {
         return new Result(sigmoid(z), contributions);
     }
 
+    /** Ordered model input features (shared by the trained model and the isolation forest). */
+    public static final java.util.List<String> FEATURE_NAMES = java.util.List.of(
+            "providerAmountDeviation", "procedureAmountDeviation", "duplicateSimilarity",
+            "treatmentDurationDays", "patientClaimFrequency", "roomRatio");
+
+    /** Normalize a feature vector into the model's [0,1] input space, in {@link #FEATURE_NAMES} order. */
+    public static double[] normalize(FeatureVector f) {
+        return new double[] {
+            normDeviation(f.providerAmountDeviation),
+            normDeviation(f.procedureAmountDeviation),
+            clamp01(f.duplicateSimilarity),
+            normDuration(f.treatmentDurationDays),
+            clamp01(f.patientClaimFrequency / 5.0),
+            clamp01(f.roomRatio)
+        };
+    }
+
+    /**
+     * Classify with a trained {@link LogisticModel}. Contributions are the
+     * learned coefficient times the normalized feature value, so the
+     * explanation layer works the same way for trained and stub models.
+     */
+    public Result classify(FeatureVector f, LogisticModel model) {
+        if (model == null) {
+            return classify(f);
+        }
+        double[] x = normalize(f);
+        Map<String, Double> contributions = new LinkedHashMap<>();
+        for (int i = 0; i < x.length; i++) {
+            contributions.put(FEATURE_NAMES.get(i), model.weights()[i] * x[i]);
+        }
+        return new Result(model.predict(x), contributions);
+    }
+
     /** Map a signed deviation ratio to [0,1]; only positive (above-norm) matters. */
     private static double normDeviation(double deviation) {
         return clamp01(Math.max(0.0, deviation) / 2.0); // +200% deviation saturates

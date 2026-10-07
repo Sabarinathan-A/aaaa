@@ -32,13 +32,25 @@ public final class AuthFilter {
             throw new ApiException(401, "Missing or malformed Authorization header");
         }
         String token = header.substring(7).trim();
+        Principal principal;
         try {
-            Principal principal = tokenService.verify(token);
-            ctx.setPrincipal(principal);
-            return principal;
+            principal = tokenService.verify(token);
         } catch (TokenService.InvalidTokenException e) {
             throw new ApiException(401, "Invalid or expired token");
         }
+        // Tokens of deleted / disabled accounts stop working immediately.
+        if (activeUserCheck != null && !activeUserCheck.test(principal.userId())) {
+            throw new ApiException(401, "Account is disabled or no longer exists");
+        }
+        ctx.setPrincipal(principal);
+        return principal;
+    }
+
+    private java.util.function.Predicate<String> activeUserCheck;
+
+    /** Optional check (set at bootstrap) that the token's user is still ACTIVE. */
+    public void setActiveUserCheck(java.util.function.Predicate<String> check) {
+        this.activeUserCheck = check;
     }
 
     /**

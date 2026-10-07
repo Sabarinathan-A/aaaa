@@ -11,6 +11,8 @@ import com.frauddetector.service.ml.AnomalyDetector;
 import com.frauddetector.service.ml.BillingAnomalyService;
 import com.frauddetector.service.ml.DuplicateDetector;
 import com.frauddetector.service.ml.FraudClassifier;
+import com.frauddetector.service.ml.IsolationForest;
+import com.frauddetector.service.ml.LogisticModel;
 import com.frauddetector.service.ml.PatientRiskService;
 import com.frauddetector.service.ml.ProviderRiskService;
 
@@ -87,15 +89,24 @@ public final class FraudRiskService {
         features.duplicateSimilarity = duplicate.similarity;
 
         // Layer scores.
-        FraudClassifier.Result fraud = fraudClassifier.classify(features);
+        LogisticModel trained = mlService == null ? null : mlService.model();
+        FraudClassifier.Result fraud = fraudClassifier.classify(features, trained);
         AnomalyDetector.Result anomaly = anomalyDetector.score(claim);
+        // Blend the statistical z-score anomaly with the Isolation Forest when trained.
+        double anomalyScore = anomaly.anomalyScore;
+        double isolationScore = -1.0;
+        IsolationForest forest = mlService == null ? null : mlService.forest();
+        if (forest != null) {
+            isolationScore = forest.normalizedScore(FraudClassifier.normalize(features));
+            anomalyScore = 0.5 * anomaly.anomalyScore + 0.5 * isolationScore;
+        }
         BillingAnomalyService.Result billing = billingAnomalyService.analyze(claim);
         ProviderRiskService.Result provider = providerRiskService.assess(claim.getProviderId());
         PatientRiskService.Result patient = patientRiskService.assess(claim);
 
         // Blend the supervised probability with the unsupervised anomaly score so
         // novel-but-not-yet-modeled patterns still raise the fraud component.
-        double fraudProbability = clamp01(0.7 * fraud.fraudProbability + 0.3 * anomaly.anomalyScore);
+        double fraudProbability = clamp01(0.7 * fraud.fraudProbability + 0.3 * anomalyScore);
 
         double combined =
                 W_FRAUD * fraudProbability
@@ -109,6 +120,12 @@ public final class FraudRiskService {
 
         List<RiskFactor> factors = buildRiskFactors(
                 features, fraud, anomaly, billing, duplicate, provider, patient);
+        if (isolationScore >= 0.6) {
+            factors.add(new RiskFactor(
+                    String.format("Isolation Forest isolates this claim as an outlier (anomaly %.2f)", isolationScore),
+                    round4(W_FRAUD * 0.15 * isolationScore)));
+            factors.sort(Comparator.comparingDouble(RiskFactor::getContribution).reversed());
+        }
 
         return new FraudAnalysis(
                 "FA-" + UUID.randomUUID(),
@@ -120,13 +137,24 @@ public final class FraudRiskService {
                 round4(patient.riskScore),
                 finalScore,
                 riskLevel,
-                FraudClassifier.MODEL_VERSION,
+                trained == null ? FraudClassifier.MODEL_VERSION : trained.version(),
                 factors,
                 Instant.now());
     }
 
     public ThresholdConfig thresholds() {
         return thresholds;
+    }
+
+    private MlService mlService;
+
+    /**
+     * Use the trained models from {@link MlService} (set at bootstrap). Without
+     * it the engine falls back to the documented stub classifier and z-score
+     * anomaly detector, which keeps unit tests deterministic.
+     */
+    public void setMlService(MlService mlService) {
+        this.mlService = mlService;
     }
 
     /**

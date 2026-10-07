@@ -16,8 +16,22 @@ import java.util.function.Function;
  */
 public class InMemoryRepository<ID, T> {
 
+    /** Global write counter; the snapshot store saves to disk when it changes. */
+    private static final java.util.concurrent.atomic.AtomicLong MODIFICATIONS =
+            new java.util.concurrent.atomic.AtomicLong();
+
     private final ConcurrentHashMap<ID, T> store = new ConcurrentHashMap<>();
     private final Function<T, ID> idExtractor;
+
+    public static long modificationCount() {
+        return MODIFICATIONS.get();
+    }
+
+    /** Remove every entity (used when restoring a snapshot). */
+    public void clear() {
+        store.clear();
+        MODIFICATIONS.incrementAndGet();
+    }
 
     protected InMemoryRepository(Function<T, ID> idExtractor) {
         this.idExtractor = idExtractor;
@@ -26,6 +40,7 @@ public class InMemoryRepository<ID, T> {
     /** Insert or replace the entity, keyed by its extracted id. */
     public T save(T entity) {
         store.put(idExtractor.apply(entity), entity);
+        MODIFICATIONS.incrementAndGet();
         return entity;
     }
 
@@ -47,5 +62,6 @@ public class InMemoryRepository<ID, T> {
 
     public void deleteById(ID id) {
         store.remove(id);
+        MODIFICATIONS.incrementAndGet();
     }
 }
